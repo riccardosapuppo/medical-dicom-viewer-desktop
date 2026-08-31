@@ -14,6 +14,8 @@
  * be one the scanner produced.
  */
 
+import { place } from './transform';
+
 /** One frame, as it came off the disk. */
 export interface Frame {
   pixels: Uint8Array | Uint16Array;
@@ -131,9 +133,18 @@ export function createImageRenderer(canvas: HTMLCanvasElement): ImageRenderer | 
     alpha: false,
     antialias: false,
     depth: false,
-    // The image is redrawn on every interaction anyway, and preserving it costs
-    // a copy of the framebuffer per frame.
-    preserveDrawingBuffer: false,
+    // Kept, rather than thrown away once composited.
+    //
+    // Two reasons, one of them a feature and one of them honesty. Exporting the
+    // image somebody is looking at means reading the buffer back, and without
+    // this there is nothing to read. And what is on the screen is otherwise
+    // unobservable: the interface check reported a uniformly black canvas while
+    // the application was plainly drawing, because by the time anything could
+    // read it the buffer had been cleared.
+    //
+    // The cost is one copy of the framebuffer per composite, which on a desktop
+    // application drawing one image is not a cost worth a fragile alternative.
+    preserveDrawingBuffer: true,
   });
 
   if (!gl) {
@@ -216,19 +227,16 @@ export function createImageRenderer(canvas: HTMLCanvasElement): ImageRenderer | 
       upload(frame);
     }
 
-    // The image is as wide as its pixels are, unless the scanner says the
-    // pixels are not square — which happens, and a viewer that ignores it
-    // measures a circle as an ellipse.
-    const imageWidth = frame.columns * frame.spacing.x;
-    const imageHeight = frame.rows * frame.spacing.y;
-    const fit = Math.min(width / imageWidth, height / imageHeight);
-    const drawnWidth = imageWidth * fit * view.zoom;
-    const drawnHeight = imageHeight * fit * view.zoom;
+    // Where the image goes is worked out in one place, shared with whatever
+    // draws over it. Two answers to that question drift apart the first time
+    // one of them is changed, and a measurement a few pixels off the thing it
+    // measures is the kind of wrong that gets believed.
+    const placed = place({ width, height }, frame, view);
 
     gl.uniform4f(
       uTransform,
-      drawnWidth / width,
-      drawnHeight / height,
+      placed.width / width,
+      placed.height / height,
       (view.panX * 2) / width,
       (-view.panY * 2) / height
     );

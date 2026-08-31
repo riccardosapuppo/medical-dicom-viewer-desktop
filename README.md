@@ -67,6 +67,40 @@ pair, a taskbar down one side — is covered by tests against invented desks.
 Inventing one is the only way to test a desk nobody owns, and it is not the
 same as owning it.
 
+## Measuring
+
+Two tools, which between them are most of what gets drawn on a diagnostic
+image: a length, and an elliptical region with statistics. Both report in the
+units the file measures in — millimetres, and Hounsfield units on a CT —
+because a length in pixels and a density in stored numbers are values nobody
+can put in a report.
+
+A length is measured across and down separately, because pixel spacing is two
+numbers and they are not always the same. Using one of them for both is right
+on square pixels and wrong by an amount too small to notice and too large to
+accept on everything else.
+
+A region is the ellipse inscribed in the box that was dragged, not the box:
+the corners of the box are a fifth of its area and they are usually somewhere
+else entirely. Pixels are tested at their centres, the deviation is the
+population one over the pixels included rather than a sample estimate, and a
+region dragged off the edge measures the part of it that is over pixels rather
+than reading whatever is next in memory.
+
+Only a CT number gets a unit. An MR number is a signal intensity whose scale
+depends on the sequence and the coil, and calling it anything would be
+inventing a unit.
+
+The annotations are drawn on a canvas of their own, over the image. Keeping
+them apart means vector work is not re-rasterised on every window drag, and it
+means anything reading the image back — including this project’s own interface
+check — is not reading its own ink.
+
+Where the image sits on the canvas is worked out in one module used by both
+the shader and the annotations. Two answers to that question agree until
+somebody changes one of them, and a measurement a few pixels off the thing it
+measures is the kind of wrong that gets believed.
+
 ## Drawing the image
 
 The stored numbers go to the graphics card untouched, as an integer texture,
@@ -222,19 +256,37 @@ entirely black all pass every other test here.
 
 It checks that a quarter of the canvas is not black, that there is a range of
 greys rather than one flat tone, that scrolling produces a genuinely different
-picture, that dragging changes the window and the picture with it, and that a
-preset lands on exactly the numbers it names.
+picture, that dragging changes the window and the picture with it, that a preset
+lands on exactly the numbers it names, that a series opens in a window of its own
+and the desk remembers it, that the keyboard moves through the stack, and that
+measurements are drawn — and that a click without a drag leaves none.
 
-Two things it taught immediately. The first version reported a uniformly black
-screen while the application was plainly drawing: with `preserveDrawingBuffer`
-off, the buffer is cleared as soon as it has been composited, so anything that
-reads it in a later task reads zeros. The measurement was wrong, not the
-drawing. And the first test for "a different slice looks different" compared
-the mean brightness, which is far too blunt — the difference between
-neighbouring slices is a couple of per cent of a couple of per cent of the
-frame. It now compares a hash of the greys, and breaking the texture upload on
-purpose confirms it notices.
+Four things it taught, each of which had produced a check that lied.
 
+It reported a uniformly black screen while the application was plainly
+drawing. With `preserveDrawingBuffer` off the buffer is cleared as soon as it
+has been composited, so anything reading it in a later task reads zeros. The
+measurement was wrong, not the drawing. The buffer is kept now — which is also
+what exporting the image somebody is looking at will need.
+
+Its first test for "a different slice looks different" compared mean
+brightness, which is far too blunt: the difference between neighbouring slices
+is a couple of per cent of a couple of per cent of the frame. It compares a
+hash of the greys now, and breaking the texture upload on purpose confirms it
+notices.
+
+Two of its readings depended on when a frame happened to be drawn, so they
+passed or failed with how busy the machine was. They read until two readings
+agree now. An unstable check is worse than no check, because it teaches you to
+ignore it.
+
+And one line of it could only ever pass — it compared a value with itself. It
+compares the image before the annotations were drawn with the image after,
+which is the property it was supposed to be testing.
+
+The suite it runs against is checked too: `npm run mutations` refuses to start
+if any test is already failing, because against a red suite every mutation
+looks caught and the report comes out perfect while proving nothing.
 ## No patient data
 
 There is none in this repository and there never will be. `npm run demo-data`
@@ -250,7 +302,10 @@ one inclusion to find.
   rows in the worklist cannot be opened, and asking for a frame comes back as
   415 naming the transfer syntax that was found.
 - One image per window. No side-by-side layouts inside a window, no linked
-  scrolling between windows, no measurements and no reformatting yet.
+  scrolling between windows, and no reformatting: no MPR, no volume rendering.
+- Measurements live for as long as the window does. They are not saved with the
+  study, not exported, and cannot be moved or removed one at a time — the whole
+  set on an image is cleared at once.
 - A series sent to a screen opens where the desk remembers it; the main window
   itself is not placed or remembered, and always opens on the primary.
 - Windows already open are not re-placed when a monitor is unplugged

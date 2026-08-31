@@ -17,7 +17,10 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import type { Patient, Series, Study } from '../../main/dicom/build-index';
 import { readableDate } from '../format';
 
+import { drawMeasurements } from './draw-measurements';
 import { FrameSource, slidesOf } from './frames';
+import { unitFor, type Measurement } from './measure';
+import { canvasToImage } from './transform';
 import { createImageRenderer, type Frame, type ImageRenderer, type View } from './gl-image';
 import { defaultWindow, describeWindow, dragWindow, PRESETS, presetName, type Window as Voi } from './window-level';
 
@@ -29,6 +32,17 @@ export interface Opened {
 
 /** Which button is doing what. Nothing here is configurable yet, and it is written down so it can be. */
 const TOOLS = { window: 0, pan: 1, zoom: 2 } as const;
+
+/** What the left button draws. The middle and right buttons never change. */
+type Tool = 'window' | 'length' | 'region';
+
+const TOOL_NAMES: ReadonlyArray<{ tool: Tool; name: string }> = [
+  { tool: 'window', name: 'Window' },
+  { tool: 'length', name: 'Length' },
+  { tool: 'region', name: 'Region' },
+];
+
+let nextMeasurementId = 0;
 
 export function Viewport({
   opened,
@@ -56,6 +70,9 @@ export function Viewport({
   const [failure, setFailure] = useState<string | undefined>(undefined);
   const [noGraphics, setNoGraphics] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [tool, setTool] = useState<Tool>('window');
+  const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  const overlayRef = useRef<HTMLCanvasElement | null>(null);
 
   const slides = useRef(slidesOf(series));
   const count = slides.current.length;
@@ -65,6 +82,13 @@ export function Viewport({
   // WebGL program sixty times a second.
   viewRef.current = { windowCentre: voi.centre, windowWidth: voi.width, zoom, panX: pan.x, panY: pan.y };
 
+  // Kept in a ref for the same reason the view is: the draw loop reads them
+  // without being rebuilt every time one is added.
+  const measurementsRef = useRef<Measurement[]>([]);
+  measurementsRef.current = measurements;
+  const atRef = useRef(0);
+  const unit = unitFor(series.modality);
+
   const paint = useCallback(() => {
     if (pendingDraw.current) {
       return;
@@ -72,11 +96,30 @@ export function Viewport({
     pendingDraw.current = requestAnimationFrame(() => {
       pendingDraw.current = 0;
       const frame = frameRef.current;
-      if (frame) {
-        rendererRef.current?.draw(frame, viewRef.current);
+      if (!frame) {
+        return;
+      }
+
+      rendererRef.current?.draw(frame, viewRef.current);
+
+      // The annotations are on a canvas of their own, over the image. Drawing
+      // them into the same buffer would mean re-rasterising vector work on
+      // every window drag, and would put them in front of anything that reads
+      // the pixels back - including this project's own interface check, which
+      // would then be measuring its own annotations.
+      const overlay = overlayRef.current?.getContext('2d');
+      if (overlay) {
+        drawMeasurements(overlay, {
+          measurements: measurementsRef.current,
+          at: atRef.current,
+          frame,
+          view: viewRef.current,
+          ratio: window.devicePixelRatio || 1,
+          unit,
+        });
       }
     });
-  }, []);
+  }, [unit]);
 
   // The canvas has to be sized in device pixels, not CSS pixels: on a screen at
   // 125 per cent a canvas sized in CSS pixels is drawn at four fifths of the
@@ -90,9 +133,15 @@ export function Viewport({
     const ratio = window.devicePixelRatio || 1;
     const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
     const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
+    const overlay = overlayRef.current;
+
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
+      if (overlay) {
+        overlay.width = width;
+        overlay.height = height;
+      }
       paint();
     }
   }, [paint]);
@@ -177,6 +226,26 @@ export function Viewport({
     };
   }, [at, paint]);
 
+  atRef.current = at;
+
+  /**
+   * Redraws after the render that changed something, not during the event that
+   * asked for it.
+   *
+   * Calling paint from a handler schedules a frame that reads the refs, and the
+   * refs are only brought up to date by the render React has not done yet. The
+   * result is a canvas that lags one interaction behind — which nobody notices
+   * while dragging, because the next move corrects it, and which shows up on
+   * the last action of a gesture: a measurement removed from the list stayed on
+   * screen, with a label reading nothing, until something else was touched.
+   *
+   * A layout effect runs after the commit and before the browser paints, so the
+   * refs are current and the drawing is not a frame late.
+   */
+  useLayoutEffect(() => {
+    paint();
+  }, [paint, measurements, voi, zoom, pan]);
+
   const step = useCallback(
     (by: number) => {
       direction.current = by >= 0 ? 1 : -1;
@@ -199,7 +268,10 @@ export function Viewport({
         PageUp: () => step(-10),
         Home: () => setAt(0),
         End: () => setAt(count - 1),
-        Escape: onClose,
+        Escape: () => (tool === 'window' ? onClose() : setTool('window')),
+        Delete: () => {
+          setMeasurements(current => current.filter(m => m.at !== at));
+        },
       };
       const action = keys[event.key];
       if (action) {
@@ -210,16 +282,59 @@ export function Viewport({
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [count, onClose, step]);
+  }, [at, count, onClose, step, tool]);
 
   const dragging = useRef<{ button: number; x: number; y: number; from: Voi; zoom: number; pan: { x: number; y: number } } | undefined>(undefined);
 
+  /** Where the pointer is, in the pixels of the image under it. */
+  const inImage = (event: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number } => {
+    const canvas = event.currentTarget;
+    const box = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    const frame = frameRef.current;
+
+    return canvasToImage(
+      { x: (event.clientX - box.left) * ratio, y: (event.clientY - box.top) * ratio },
+      { width: canvas.width, height: canvas.height },
+      {
+        columns: frame?.columns ?? 1,
+        rows: frame?.rows ?? 1,
+        spacing: frame?.spacing ?? { x: 1, y: 1 },
+      },
+      viewRef.current
+    );
+  };
+
+  /** The measurement being dragged out right now, if there is one. */
+  const drawingId = useRef<string | undefined>(undefined);
+
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>): void => {
     event.currentTarget.setPointerCapture(event.pointerId);
+
+    if (event.button === TOOLS.window && tool !== 'window' && frameRef.current) {
+      const point = inImage(event);
+      const id = `m${nextMeasurementId++}`;
+      drawingId.current = id;
+      setMeasurements(current => [
+        ...current,
+        { kind: tool === 'length' ? 'length' : 'region', id, at, from: point, to: point },
+      ]);
+      return;
+    }
+
     dragging.current = { button: event.button, x: event.clientX, y: event.clientY, from: voi, zoom, pan };
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>): void => {
+    const drawing = drawingId.current;
+    if (drawing) {
+      const point = inImage(event);
+      setMeasurements(current =>
+        current.map(m => (m.id === drawing ? { ...m, to: point } : m))
+      );
+      return;
+    }
+
     const drag = dragging.current;
     if (!drag) {
       return;
@@ -236,20 +351,33 @@ export function Viewport({
       // towards you, and the way every workstation does it.
       setZoom(Math.min(20, Math.max(0.1, drag.zoom * Math.exp(dy / 200))));
     }
-    paint();
   };
 
   const endDrag = (event: React.PointerEvent<HTMLCanvasElement>): void => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+
+    const drawing = drawingId.current;
+    if (drawing) {
+      drawingId.current = undefined;
+      // A click without a drag is a click, not a measurement of nothing. Left
+      // in, it becomes a label reading 0.0 mm that has to be found and removed.
+      setMeasurements(current =>
+        current.filter(
+          m =>
+            m.id !== drawing ||
+            Math.hypot(m.to.x - m.from.x, m.to.y - m.from.y) > 2
+        )
+      );
+    }
+
     dragging.current = undefined;
   };
 
   const onWheel = (event: React.WheelEvent<HTMLCanvasElement>): void => {
     if (event.ctrlKey) {
       setZoom(z => Math.min(20, Math.max(0.1, z * Math.exp(-event.deltaY / 400))));
-      paint();
       return;
     }
     step(event.deltaY > 0 ? 1 : -1);
@@ -259,10 +387,10 @@ export function Viewport({
     setVoi(defaultWindow(slides.current[at]?.pixels ?? ({} as never)));
     setZoom(1);
     setPan({ x: 0, y: 0 });
-    paint();
   };
 
   const slide = slides.current[at];
+  const onThisImage = measurements.filter(m => m.at === at);
   const named = presetName(voi);
 
   return (
@@ -275,6 +403,30 @@ export function Viewport({
           {series.description || 'unnamed series'}
           <span className="viewport__series">series {series.seriesNumber ?? '--'}</span>
         </span>
+        <span className="viewport__tools">
+          {TOOL_NAMES.map(({ tool: which, name }) => (
+            <button
+              type="button"
+              key={which}
+              className={tool === which ? 'chip chip--on' : 'chip'}
+              onClick={() => setTool(which)}
+            >
+              {name}
+            </button>
+          ))}
+          {onThisImage.length > 0 ? (
+            <button
+              type="button"
+              className="chip"
+              onClick={() => {
+                setMeasurements(current => current.filter(m => m.at !== at));
+              }}
+            >
+              Clear
+            </button>
+          ) : null}
+        </span>
+
         <span className="viewport__presets">
           {PRESETS.map(preset => (
             <button
@@ -283,7 +435,6 @@ export function Viewport({
               className={named === preset.name ? 'chip chip--on' : 'chip'}
               onClick={() => {
                 setVoi(preset.window);
-                paint();
               }}
             >
               {preset.name}
@@ -295,7 +446,10 @@ export function Viewport({
         </span>
       </header>
 
-      <div className="viewport__stage">
+      {/* The count is on the element rather than only inside a canvas, so that
+          what is measured on this image can be asked about rather than
+          inferred from how many pixels of ink appeared. */}
+      <div className="viewport__stage" data-measurements={onThisImage.length}>
         <canvas
           ref={canvasRef}
           className="viewport__canvas"
@@ -307,6 +461,10 @@ export function Viewport({
           onDoubleClick={reset}
           onContextMenu={event => event.preventDefault()}
         />
+
+        {/* Over the image, and never taking a click: every gesture belongs to
+            the canvas underneath, which is where the tools live. */}
+        <canvas ref={overlayRef} className="viewport__overlay" />
 
         {/* The four corners, where a reading workstation has always put them. */}
         <div className="overlay overlay--top-left">
@@ -357,7 +515,9 @@ export function Viewport({
       </div>
 
       <footer className="viewport__hint">
-        <span>drag to window</span>
+        <span>
+          drag to {tool === 'window' ? 'window' : tool === 'length' ? 'measure' : 'draw a region'}
+        </span>
         <span>wheel to scroll the stack</span>
         <span>middle to pan</span>
         <span>right to zoom</span>

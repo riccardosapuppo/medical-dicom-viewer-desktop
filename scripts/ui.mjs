@@ -103,75 +103,73 @@ try {
   /**
    * Reads back what the graphics card actually produced.
    *
-   * The first version of this read the canvas whenever it liked and reported a
-   * uniformly black screen while the application was plainly drawing an image.
-   * The measurement was wrong, not the drawing: with preserveDrawingBuffer off
-   * the buffer is cleared as soon as it has been composited, so anything that
-   * reads it in a later task reads zeros.
-   *
-   * So the read happens inside the same frame as a draw. Dispatching a wheel
-   * event with no movement makes the application schedule its redraw; the
-   * callback registered immediately afterwards runs after that redraw, in the
-   * same frame, while the pixels are still there.
+   * A plain read, because the application keeps its drawing buffer. An earlier
+   * version of this had to dispatch an event to force a redraw and read inside
+   * the same frame, which worked until the redraw stopped being triggered from
+   * the event handler and started following the render. A measurement that
+   * depends on how the thing it measures is scheduled is a measurement that
+   * will lie again.
    */
-  const sample = () =>
-    page.evaluate(
-      () =>
-        new Promise(resolve => {
-          const canvas = document.querySelector('.viewport__canvas');
-          canvas.dispatchEvent(
-            new WheelEvent('wheel', { ctrlKey: true, deltaY: 0, bubbles: true })
-          );
+  /**
+   * Waits until a reading stops changing before believing it.
+   *
+   * The drawing happens in an animation frame after the render that asked for
+   * it, so a read taken straight after an interaction can catch the frame
+   * before. A check that depends on how busy the machine is will pass and fail
+   * for no reason, and an unstable check teaches you to ignore it.
+   */
+  async function settled(read, same) {
+    let previous;
+    for (let i = 0; i < 30; i++) {
+      const now = await read();
+      if (previous !== undefined && same(previous, now)) {
+        return now;
+      }
+      previous = now;
+      await new Promise(resolve => setTimeout(resolve, 40));
+    }
+    return previous;
+  }
 
-          requestAnimationFrame(() => {
-            const gl = canvas.getContext('webgl2');
-            const width = canvas.width;
-            const height = canvas.height;
-            const pixels = new Uint8Array(width * height * 4);
-            gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  const sample = () => settled(sampleOnce, (a, b) => a.signature === b.signature);
 
-            let lit = 0;
-            let total = 0;
-            let min = 255;
-            let max = 0;
-            for (let i = 0; i < pixels.length; i += 4) {
-              const grey = pixels[i];
-              total += grey;
-              if (grey > 8) {
-                lit++;
-              }
-              if (grey < min) {
-                min = grey;
-              }
-              if (grey > max) {
-                max = grey;
-              }
-            }
+  const sampleOnce = () =>
+    page.evaluate(() => {
+      const canvas = document.querySelector('.viewport__canvas');
+      const gl = canvas.getContext('webgl2');
+      const width = canvas.width;
+      const height = canvas.height;
+      const pixels = new Uint8Array(width * height * 4);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
 
-            // The mean over a whole canvas is too blunt to tell two slices apart:
-            // the difference between neighbouring slices of a chest is a couple
-            // of per cent of a couple of per cent of the frame, and it rounds
-            // away. A hash of the greys does not round anything away.
-            let signature = 2166136261;
-            for (let i = 0; i < pixels.length; i += 4) {
-              signature ^= pixels[i];
-              signature = Math.imul(signature, 16777619) >>> 0;
-            }
+      let lit = 0;
+      let total = 0;
+      let min = 255;
+      let max = 0;
+      // The mean over a whole canvas is too blunt to tell two slices apart: the
+      // difference between neighbouring slices is a couple of per cent of a
+      // couple of per cent of the frame, and it rounds away. A hash does not.
+      let signature = 2166136261;
 
-            const count = pixels.length / 4;
-            resolve({
-              width,
-              height,
-              lit,
-              pixels: count,
-              mean: total / count,
-              min,
-              max,
-              signature,
-            });
-          });
-        })
-    );
+      for (let i = 0; i < pixels.length; i += 4) {
+        const grey = pixels[i];
+        total += grey;
+        if (grey > 8) {
+          lit++;
+        }
+        if (grey < min) {
+          min = grey;
+        }
+        if (grey > max) {
+          max = grey;
+        }
+        signature ^= grey;
+        signature = Math.imul(signature, 16777619) >>> 0;
+      }
+
+      const count = pixels.length / 4;
+      return { width, height, lit, pixels: count, mean: total / count, min, max, signature };
+    });
 
   const drawn = await sample();
   check(
@@ -301,6 +299,86 @@ try {
   check('the keyboard moves through the stack', byKeyboard.startsWith('31'), byKeyboard);
 
   await page.getByRole('button', { name: 'Soft tissue' }).click();
+
+  /**
+   * How much of the annotation canvas has anything drawn on it, once it has
+   * stopped changing.
+   *
+   * The drawing happens in an animation frame after the render that asked for
+   * it, so a read taken straight after an interaction can catch the frame
+   * before. That produced a check which reported a stale number and passed or
+   * failed depending on how busy the machine was, which is worse than no check:
+   * an unstable check teaches you to ignore it. So it reads until two readings
+   * agree.
+   */
+  const inked = () => settled(inkedOnce, (a, b) => a === b);
+
+  const inkedOnce = () =>
+    page.evaluate(() => {
+      const overlay = document.querySelector('.viewport__overlay');
+      const context = overlay.getContext('2d');
+      const { data } = context.getImageData(0, 0, overlay.width, overlay.height);
+      let drawn = 0;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] > 8) {
+          drawn++;
+        }
+      }
+      return drawn;
+    });
+
+  // The annotations are on a canvas of their own, so "a measurement appeared"
+  // is a question about that canvas and not about the image underneath.
+  check('the annotation layer starts empty', (await inked()) === 0);
+
+  const bare = await sample();
+
+  const stage = await page.locator('.viewport__canvas').boundingBox();
+  const middle = { x: stage.x + stage.width / 2, y: stage.y + stage.height / 2 };
+
+  await page.getByRole('button', { name: 'Length' }).click();
+  await page.mouse.move(middle.x - 160, middle.y - 90);
+  await page.mouse.down();
+  await page.mouse.move(middle.x + 60, middle.y - 90, { steps: 10 });
+  await page.mouse.up();
+
+  const withLength = await inked();
+  check('a length was drawn', withLength > 200, `${withLength} pixels of ink`);
+
+  await page.getByRole('button', { name: 'Region' }).click();
+  await page.mouse.move(middle.x - 40, middle.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(middle.x + 60, middle.y + 100, { steps: 10 });
+  await page.mouse.up();
+
+  const withRegion = await inked();
+  check('a region was drawn as well', withRegion > withLength, `${withRegion} pixels of ink`);
+
+  // Drawing over the image must not become part of it. If the annotations were
+  // rasterised into the same buffer, anything that reads the pixels back would
+  // be reading them too - including this check, which would then be measuring
+  // its own ink. The first version of this line compared nothing and could only
+  // pass, which is the same as not checking.
+  const beneath = await sample();
+  check(
+    'the annotations are not in the image buffer',
+    beneath.signature === bare.signature,
+    beneath.signature === bare.signature
+      ? 'the image is byte for byte what it was'
+      : `${bare.signature.toString(16)} became ${beneath.signature.toString(16)}`
+  );
+
+  // A click with no drag is a click, not a measurement of nothing.
+  await page.getByRole('button', { name: 'Length' }).click();
+  await page.mouse.click(middle.x + 200, middle.y + 150);
+  const afterClick = await inked();
+  const counted = await page.locator('.viewport__stage').getAttribute('data-measurements');
+  check(
+    'a click leaves no measurement',
+    counted === '2' && afterClick === withRegion,
+    `${counted} measurements, ${withRegion} pixels of ink before and ${afterClick} after`
+  );
+  await page.getByRole('button', { name: 'Window' }).click();
   await page.screenshot({ path: path.join(root, 'docs', 'viewer.png') });
   console.log(`\n  wrote docs/viewer.png`);
 

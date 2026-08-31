@@ -118,6 +118,66 @@ const MUTATIONS = [
     'header: a text file is treated as a corrupt image instead of skipped',
   ],
   [
+    "src/renderer/viewer/transform.ts",
+    "  const fit = Math.min(canvas.width / millimetresAcross, canvas.height / millimetresDown);",
+    "  const fit = Math.max(canvas.width / millimetresAcross, canvas.height / millimetresDown);",
+    "transform: the image overflows the canvas instead of fitting it",
+  ],
+  [
+    "src/renderer/viewer/transform.ts",
+    "  const millimetresAcross = image.columns * image.spacing.x;",
+    "  const millimetresAcross = image.columns;",
+    "transform: non-square pixels are drawn as square",
+  ],
+  [
+    "src/renderer/viewer/transform.ts",
+    "    x: ((point.x - placed.centreX) / placed.width + 0.5) * image.columns,",
+    "    x: (point.x - placed.centreX) / placed.width * image.columns,",
+    "transform: canvas to image is off by half the image",
+  ],
+  [
+    "src/renderer/viewer/transform.ts",
+    "  return Math.hypot((b.x - a.x) * image.spacing.x, (b.y - a.y) * image.spacing.y);",
+    "  return Math.hypot(b.x - a.x, b.y - a.y) * image.spacing.x;",
+    "transform: one spacing is used for both directions",
+  ],
+  [
+    "src/renderer/viewer/measure.ts",
+    "      if (dx * dx + dy * dy > 1) {",
+    "      if (false) {",
+    "measure: the region is the box, not the ellipse in it",
+  ],
+  [
+    "src/renderer/viewer/measure.ts",
+    "      const dx = (x + 0.5 - centreX) / radiusX;",
+    "      const dx = (x - centreX) / radiusX;",
+    "measure: the region is shifted by half a pixel",
+  ],
+  [
+    "src/renderer/viewer/measure.ts",
+    "  const stored = frame.signed && raw > span / 2 - 1 ? raw - span : raw;",
+    "  const stored = raw;",
+    "measure: a CT reports air at sixty-four thousand",
+  ],
+  [
+    "src/renderer/viewer/measure.ts",
+    "  return stored * frame.rescaleSlope + frame.rescaleIntercept;",
+    "  return stored;",
+    "measure: the rescale is skipped and the numbers are not Hounsfield units",
+  ],
+  [
+    "src/renderer/viewer/measure.ts",
+    "  const variance = Math.max(0, totalOfSquares / count - mean * mean);",
+    "  const variance = totalOfSquares / count - mean * mean;",
+    "measure: a flat region reports a deviation of NaN",
+  ],
+  [
+    "src/renderer/viewer/measure.ts",
+    "    area: count * frame.spacing.x * frame.spacing.y,",
+    "    area: count,",
+    "measure: the area is in pixels rather than square millimetres",
+  ],
+  [
     "src/main/layout/panes.ts",
     "    x: pane.workArea.x + 1,",
     "    x: pane.bounds.x + 1,",
@@ -302,6 +362,26 @@ const restore = () => {
   }
 };
 process.on('exit', restore);
+
+/** How many tests fail right now. */
+function redCount() {
+  try {
+    const out = execSync('npm test', { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return Number(/^S* fail (d+)$/m.exec(out)?.[1] ?? 0);
+  } catch (e) {
+    return Number(/^S* fail (d+)$/m.exec(String(e.stdout ?? ''))?.[1] ?? 1);
+  }
+}
+
+// A suite that is already failing makes every mutation look caught, and the
+// report comes out perfect while proving nothing at all.
+const alreadyRed = redCount();
+if (alreadyRed > 0) {
+  console.error(
+    `${alreadyRed} test${alreadyRed === 1 ? '' : 's'} already failing. Fix them first: against a red suite every mutation looks caught.`
+  );
+  process.exit(2);
+}
 
 let survivors = 0;
 
