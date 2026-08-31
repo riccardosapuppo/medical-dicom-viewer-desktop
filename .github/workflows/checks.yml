@@ -1,0 +1,51 @@
+# What runs on every push.
+#
+# Not everything this project can check. `check:ui` and `check:packaged` drive
+# a real window and read pixels back off a graphics card, and a runner has
+# neither a screen nor a GPU: run there they would fail for a reason that has
+# nothing to do with the code, and a check that fails for the wrong reason
+# teaches you to ignore the ones that fail for the right one. Those two are run
+# on a machine with a screen, which is the only place their answer means
+# anything.
+#
+# What does run is the part that needs no screen — and that includes the
+# mutation harness, because a green suite says the tests ran and not that they
+# would catch anything.
+
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Electron downloads a hundred megabytes of browser at install time and
+      # nothing below opens a window, so it is skipped. The type checker still
+      # needs its types, which come from the package and not from the binary.
+      - name: Install
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Do the tests actually test anything
+        run: npm run mutations
