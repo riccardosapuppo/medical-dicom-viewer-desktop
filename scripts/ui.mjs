@@ -235,6 +235,58 @@ try {
   const lung = (await page.locator('.overlay--bottom-left span').first().innerText()).trim();
   check('a preset sets the window it names', lung === 'W 1500 L -600', lung);
 
+  // A window of its own, on a chosen pane of the desk. On a machine with one
+  // screen this only exercises the path, not the placement - the placement is
+  // covered by the tests against invented desks, which is the only way to test
+  // a desk nobody owns.
+  await page.getByRole('button', { name: 'Back to the list' }).click();
+  await page.waitForSelector('.patient', { timeout: 20000 });
+
+  const row = page.locator('.series').nth(biggest);
+  await row.hover();
+
+  // Taken here rather than by the application itself, because the screens a
+  // series can be sent to only appear under the pointer, and a screenshot of
+  // the feature has to have the pointer on it.
+  await page.screenshot({ path: path.join(root, 'docs', 'library.png') });
+  const second = context.waitForEvent('page', { timeout: 30000 });
+  await row.locator('.screen').first().click();
+  const reading = await second;
+
+  await reading.waitForSelector('.viewport__canvas', { timeout: 30000 });
+  await reading.waitForFunction(() => !document.querySelector('.viewport__loading'), undefined, {
+    timeout: 30000,
+  });
+
+  const detached = await reading.evaluate(() => ({
+    worklist: document.querySelectorAll('.patient').length,
+    hint: document.querySelectorAll('.viewport__hint').length,
+    canvas: document.querySelector('.viewport__canvas')?.width ?? 0,
+    close: document.querySelector('.viewport__bar .button')?.textContent ?? '',
+  }));
+
+  check('a series opened in a window of its own', detached.canvas > 300, `canvas ${detached.canvas} wide`);
+  check('that window carries no worklist', detached.worklist === 0);
+  check('and it says Close, not Back to the list', detached.close === 'Close', detached.close);
+
+  // The arrangement is remembered against the desk fingerprint, so closing the
+  // window and asking for it back should bring it back.
+  await reading.close();
+  const third = context.waitForEvent('page', { timeout: 30000 });
+  await page.getByRole('button', { name: 'Restore arrangement' }).click();
+  const restored = await third;
+  await restored.waitForSelector('.viewport__canvas', { timeout: 30000 });
+  const said = await page.locator('.status__said').innerText();
+
+  check('the desk remembered the arrangement', said.includes('1 window'), said.trim());
+  await restored.close();
+
+  // Back to the series in the main window for the rest of the checks.
+  await page.locator('.series').nth(biggest).locator('.series__open').click();
+  await page.waitForSelector('.viewport__canvas', { timeout: 20000 });
+  await page.waitForFunction(() => !document.querySelector('.viewport__loading'), undefined, {
+    timeout: 30000,
+  });
   // The keyboard is not a convenience here: somebody scrolling a stack with one
   // hand on the mouse and one on the keyboard is the normal posture, and a
   // viewer reachable only by dragging is one that some people cannot use.

@@ -22,6 +22,7 @@ export function App(): React.ReactElement {
   const [changedAt, setChangedAt] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [opened, setOpened] = useState<Opened | undefined>(undefined);
+  const [restored, setRestored] = useState<string | undefined>(undefined);
   const library = useLibrary();
 
   useEffect(() => {
@@ -69,6 +70,24 @@ export function App(): React.ReactElement {
               Stop
             </button>
           ) : null}
+          {library.state.status === 'ready' ? (
+            <button
+              type="button"
+              className="button"
+              title="Reopen the windows this desk was last arranged with"
+              onClick={() => {
+                void window.workstation.restoreArrangement().then(opened => {
+                  setRestored(
+                    opened > 0
+                      ? `${opened} window${opened === 1 ? '' : 's'} reopened`
+                      : 'nothing remembered for this desk'
+                  );
+                });
+              }}
+            >
+              Restore arrangement
+            </button>
+          ) : null}
           <button type="button" className="button button--primary" onClick={library.open}>
             Open folder
           </button>
@@ -78,12 +97,19 @@ export function App(): React.ReactElement {
       {opened ? (
         <Viewport opened={opened} onClose={() => setOpened(undefined)} />
       ) : (
-        <Body desk={desk} deskKey={changedAt} library={library} onOpen={setOpened} />
+        <Body
+          desk={desk}
+          deskKey={changedAt}
+          library={library}
+          onOpen={setOpened}
+          screens={desk?.panes.length ?? 1}
+        />
       )}
 
       <footer className="status">
         <span className="status__key">desk</span>
         <span className="status__value">{desk?.fingerprint ?? '...'}</span>
+        {restored ? <span className="status__said">{restored}</span> : null}
         <span className="status__spacer" />
         <Tally library={library} />
         <span className="status__muted">
@@ -113,11 +139,13 @@ function Body({
   deskKey,
   library,
   onOpen,
+  screens,
 }: {
   desk: Desk | undefined;
   deskKey: number;
   library: ReturnType<typeof useLibrary>;
   onOpen: (opened: Opened) => void;
+  screens: number;
 }): React.ReactElement {
   const { state } = library;
 
@@ -159,7 +187,7 @@ function Body({
   if (state.status === 'ready') {
     return (
       <section className="panel panel--list">
-        <Library reading={state.reading} onOpen={onOpen} />
+        <Library reading={state.reading} onOpen={onOpen} screens={screens} />
       </section>
     );
   }

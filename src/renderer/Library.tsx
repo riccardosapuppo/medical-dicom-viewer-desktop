@@ -17,9 +17,12 @@ import type { LibraryReading } from './useLibrary';
 function SeriesRow({
   series,
   onOpen,
+  screens,
 }: {
   series: Series;
   onOpen: () => void;
+  /** How many panes the desk has, so a series can be sent to one of them. */
+  screens: number;
 }): React.ReactElement {
   const first = series.instances[0];
   // A series with nothing in it, or nothing that can be drawn, is listed but
@@ -49,6 +52,24 @@ function SeriesRow({
         {series.orderedByGeometry ? 'by position' : 'by number'}
       </span>
       </button>
+
+      {/* Sending a series to a screen is the whole point of a reading room, and
+          it belongs on the row rather than behind a menu: it is done constantly
+          and always to a particular series. */}
+      <span className="series__screens">
+        {Array.from({ length: screens }, (_, pane) => (
+          <button
+            type="button"
+            key={pane}
+            className="screen"
+            disabled={!openable}
+            title={`Open this series in its own window on screen ${pane + 1}`}
+            onClick={() => void window.workstation.openOnScreen(series.seriesInstanceUid, pane)}
+          >
+            {pane + 1}
+          </button>
+        ))}
+      </span>
     </li>
   );
 }
@@ -57,10 +78,12 @@ function StudyBlock({
   study,
   patient,
   onOpen,
+  screens,
 }: {
   study: Study;
   patient: Patient;
   onOpen: (opened: Opened) => void;
+  screens: number;
 }): React.ReactElement {
   const [open, setOpen] = useState(true);
 
@@ -86,6 +109,7 @@ function StudyBlock({
             <SeriesRow
               key={series.seriesInstanceUid}
               series={series}
+              screens={screens}
               onOpen={() => onOpen({ patient, study, series })}
             />
           ))}
@@ -98,9 +122,11 @@ function StudyBlock({
 export function Library({
   reading,
   onOpen,
+  screens,
 }: {
   reading: LibraryReading;
   onOpen: (opened: Opened) => void;
+  screens: number;
 }): React.ReactElement {
   const { patients } = reading.index;
 
@@ -134,6 +160,7 @@ export function Library({
               study={study}
               patient={patient}
               onOpen={onOpen}
+              screens={screens}
             />
           ))}
         </section>

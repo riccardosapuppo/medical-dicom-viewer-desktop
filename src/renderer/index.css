@@ -701,3 +701,81 @@ body {
   opacity: 0.45;
   cursor: default;
 }
+
+/* ---- sending a series to a screen ---------------------------------------- */
+
+.series {
+  /* One more column than before: the screens a series can be sent to. */
+  grid-template-columns: 4ch minmax(0, 1fr) 8ch 11ch 12ch auto;
+}
+
+.series__screens {
+  display: flex;
+  gap: 3px;
+  /* Present but quiet until the row is under the pointer: a worklist of forty
+     series should not read as eighty buttons. */
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.series:hover .series__screens,
+.series__screens:focus-within {
+  opacity: 1;
+}
+
+.screen {
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--ink-faint);
+  background: none;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.screen:hover:not(:disabled) {
+  color: var(--live);
+  border-color: var(--live-dim);
+}
+
+.screen:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.screen:focus-visible {
+  outline: 1px solid var(--live);
+  outline-offset: 1px;
+}
+
+.status__said {
+  color: var(--ink-dim);
+}
+
+/* A window that shows one series and nothing else: no padding, no strip along
+   the bottom, the image against the edges of the glass. */
+.shell--reading {
+  grid-template-rows: minmax(0, 1fr);
+  padding: 0;
+  gap: 0;
+}
+
+.shell--reading .viewport {
+  gap: 0;
+}
+
+.shell--reading .viewport__bar {
+  padding: 8px 12px;
+}
+
+.shell--reading .viewport__stage {
+  border: 0;
+  border-radius: 0;
+}
+
+.shell--reading .viewport__hint {
+  display: none;
+}

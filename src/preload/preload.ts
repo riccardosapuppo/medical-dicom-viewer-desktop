@@ -39,6 +39,29 @@ const api = {
 
   cancelReading: (): Promise<void> => ipcRenderer.invoke('library:cancel'),
 
+  /**
+   * What the application currently has open.
+   *
+   * A window opened on another screen asks this rather than being told, so it
+   * can start from whatever it finds instead of waiting for a message that may
+   * arrive before or after it is ready.
+   */
+  currentReading: (): Promise<unknown> => ipcRenderer.invoke('library:current'),
+
+  /** Opens a series in its own window on the given pane of the desk. */
+  openOnScreen: (seriesInstanceUid: string, pane: number): Promise<void> =>
+    ipcRenderer.invoke('reading:open', seriesInstanceUid, pane),
+
+  closeReading: (seriesInstanceUid: string): Promise<void> =>
+    ipcRenderer.invoke('reading:close', seriesInstanceUid),
+
+  /** Which screen this desk last had this series on, if any. */
+  recallScreen: (seriesInstanceUid: string): Promise<number | undefined> =>
+    ipcRenderer.invoke('reading:recall', seriesInstanceUid),
+
+  /** Reopens the arrangement this desk remembers. Resolves to how many windows opened. */
+  restoreArrangement: (): Promise<number> => ipcRenderer.invoke('reading:restore'),
+
   /** A folder the application was asked to open: a command line, or a second launch. */
   onOpenRequest: (handler: (folder: string) => void): (() => void) => {
     const listener = (_event: unknown, folder: string): void => handler(folder);

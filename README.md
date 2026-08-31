@@ -9,8 +9,9 @@ an independent reimplementation, written from scratch with synthetic data.
 
 ## Where it is
 
-A folder of studies opens, reads into a worklist, and a series opens onto an
-image you can scroll, window, zoom and pan.
+A folder of studies opens, reads into a worklist, a series opens onto an image
+you can scroll, window, zoom and pan, and a series can be sent to a screen of
+its own — where the desk remembers it.
 
 ```
 npm install
@@ -32,6 +33,39 @@ it is not imitation: somebody who reads all day has it in their hands, and a
 viewer that puts zoom on the left button gets the window changed by accident on
 the first study. Arrow keys, page up and down, home and end do the same thing,
 because a viewer reachable only by dragging is one that some people cannot use.
+
+## Screens, and a desk that remembers
+
+Hovering a series in the worklist shows one small button per screen. Pressing
+one opens that series in a window of its own on that pane of glass: no
+worklist, no folder, nothing but the image, because that is what a reporting
+monitor is for.
+
+![The worklist](docs/library.png)
+
+Where each series was put is written down against the desk fingerprint, and
+**Restore arrangement** brings the windows back. Keyed on the fingerprint
+rather than on screen ids for the reason the fingerprint exists: a radiologist
+who docks their laptop in the morning gets the arrangement they left, and the
+same person working from the laptop alone gets a different desk and a
+different arrangement — which is correct, not a failure to remember.
+
+A placement on a screen that is no longer attached is never used. The
+arrangement was made on a bigger desk, and a window opened at coordinates
+nobody can see is worse than a window that did not open.
+
+Windows are placed inside a pane’s work area rather than over the whole of
+it, and one pixel in on each side. A window covering the taskbar is one
+somebody cannot get out from behind, and a window exactly the size of the work
+area is treated by Windows as maximised and loses its border, which makes two
+adjacent reading windows impossible to tell apart.
+
+None of this has met real hardware. This machine has one screen, so `check:ui`
+exercises the whole path and not the placement, and the placement itself — a
+monitor left of the primary and therefore at negative coordinates, a portrait
+pair, a taskbar down one side — is covered by tests against invented desks.
+Inventing one is the only way to test a desk nobody owns, and it is not the
+same as owning it.
 
 ## Drawing the image
 
@@ -215,10 +249,13 @@ one inclusion to find.
 - Only uncompressed pixel data is drawn. A compressed series is listed, its
   rows in the worklist cannot be opened, and asking for a frame comes back as
   415 naming the transfer syntax that was found.
-- One image at a time. No side-by-side layouts, no prior study alongside the
-  current one, no measurements, no reformatting, and no second window on a
-  second monitor — which is the point of the desk fingerprint and is the next
-  thing to build.
+- One image per window. No side-by-side layouts inside a window, no linked
+  scrolling between windows, no measurements and no reformatting yet.
+- A series sent to a screen opens where the desk remembers it; the main window
+  itself is not placed or remembered, and always opens on the primary.
+- Windows already open are not re-placed when a monitor is unplugged
+  mid-session. The system moves them somewhere visible and the new desk gets
+  its own arrangement from then on.
 - The window opens on the primary screen at a workable size. Placing it on the
   reporting monitor, and putting it back where it was, is what the fingerprint
   is for and is not built yet.

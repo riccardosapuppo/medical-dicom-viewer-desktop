@@ -17,6 +17,8 @@ import { app, BrowserWindow, dialog, ipcMain, protocol, screen, shell } from 'el
 import { describe, readDesk, type Desk } from './display-topology';
 import { Indexer } from './library/indexer-host';
 import { PixelServer, SCHEME } from './library/pixel-server';
+import { ReadingWindows } from './layout/reading-windows';
+import { arrangement, load, recall, remember, save, type Layouts } from './layout/store';
 
 /** Where the built renderer lives, relative to the compiled main process. */
 const RENDERER = path.join(__dirname, 'renderer', 'index.html');
@@ -145,17 +147,79 @@ if (!app.requestSingleInstanceLock()) {
     // hears about it comes through here.
     const indexer = new Indexer();
     const pixels = new PixelServer();
+    const reading = new ReadingWindows();
+
+    const layoutFile = path.join(app.getPath('userData'), 'layouts.json');
+    let layouts: Layouts = load(layoutFile);
+
+    // The last folder that was read, kept so that a window opened on another
+    // screen can ask what it is showing without the main window having to tell
+    // it - a message that would arrive either before or after the page is ready.
+    let current: Extract<Parameters<Parameters<Indexer['on']>[0]>[0], { type: 'done' }> | undefined;
 
     indexer.on(message => {
       // What the page may fetch is exactly what is in the folder it is looking
       // at, and it changes at the same moment the list does.
       if (message.type === 'done') {
         pixels.remember(message.index);
+        current = message;
       } else if (message.type === 'failed') {
         pixels.forget();
+        current = undefined;
       }
+
+      // A window showing a series from the folder that has just been replaced
+      // is a window showing something that is no longer open.
+      if (message.type !== 'progress') {
+        reading.closeAll();
+      }
+
       mainWindow?.webContents.send('library:message', message);
     });
+
+    ipcMain.handle('library:current', () => current);
+
+    ipcMain.handle('reading:open', (_event, seriesInstanceUid: unknown, pane: unknown) => {
+      if (typeof seriesInstanceUid !== 'string' || typeof pane !== 'number') {
+        return;
+      }
+      reading.open(seriesInstanceUid, pane, desk.panes);
+      layouts = remember(layouts, desk.fingerprint, seriesInstanceUid, pane, Date.now());
+      save(layoutFile, layouts);
+    });
+
+    ipcMain.handle('reading:close', (_event, seriesInstanceUid: unknown) => {
+      if (typeof seriesInstanceUid === 'string') {
+        reading.close(seriesInstanceUid);
+      }
+    });
+
+    /** Where this desk last had a series, if it had it anywhere it still has. */
+    ipcMain.handle('reading:recall', (_event, seriesInstanceUid: unknown) =>
+      typeof seriesInstanceUid === 'string'
+        ? recall(layouts, desk.fingerprint, seriesInstanceUid, desk.panes.length)
+        : undefined
+    );
+
+    /** Reopens everything this desk remembers, for series the open folder has. */
+    ipcMain.handle('reading:restore', () => {
+      const known = new Set(
+        current?.index.patients.flatMap(patient =>
+          patient.studies.flatMap(study => study.series.map(series => series.seriesInstanceUid))
+        ) ?? []
+      );
+
+      let opened = 0;
+      for (const placement of arrangement(layouts, desk.fingerprint, desk.panes.length)) {
+        if (known.has(placement.seriesInstanceUid)) {
+          reading.open(placement.seriesInstanceUid, placement.pane, desk.panes);
+          opened++;
+        }
+      }
+      return opened;
+    });
+
+    app.on('will-quit', () => reading.closeAll());
 
     protocol.handle(SCHEME, request => pixels.handle(request));
 

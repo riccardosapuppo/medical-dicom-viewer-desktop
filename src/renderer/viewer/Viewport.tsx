@@ -30,7 +30,16 @@ export interface Opened {
 /** Which button is doing what. Nothing here is configurable yet, and it is written down so it can be. */
 const TOOLS = { window: 0, pan: 1, zoom: 2 } as const;
 
-export function Viewport({ opened, onClose }: { opened: Opened; onClose: () => void }): React.ReactElement {
+export function Viewport({
+  opened,
+  onClose,
+  detached = false,
+}: {
+  opened: Opened;
+  onClose: () => void;
+  /** True in a window that shows nothing but this series, on a reading monitor. */
+  detached?: boolean;
+}): React.ReactElement {
   const { patient, study, series } = opened;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -260,7 +269,7 @@ export function Viewport({ opened, onClose }: { opened: Opened; onClose: () => v
     <section className="viewport">
       <header className="viewport__bar">
         <button type="button" className="button" onClick={onClose}>
-          Back to the list
+          {detached ? 'Close' : 'Back to the list'}
         </button>
         <span className="viewport__title">
           {series.description || 'unnamed series'}
