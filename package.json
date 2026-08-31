@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "build:test": "esbuild tests/display-topology.test.ts --bundle --platform=node --target=node20 --format=cjs --outdir=dist/tests",
     "test": "npm run build:test && node --test \"dist/tests/*.test.js\"",
-    "mutations": "node tools/mutations.mjs"
+    "mutations": "node tools/mutations.mjs",
+    "demo-data": "esbuild tools/make-demo-data.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/make-demo-data.js && node dist/make-demo-data.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
