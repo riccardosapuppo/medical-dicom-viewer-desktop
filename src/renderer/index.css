@@ -1,0 +1,239 @@
+/*
+ * A reading room is dark, and so is this. The greys are cool rather than
+ * neutral so that a greyscale image sitting on top of them reads as warm by
+ * comparison, which is what makes soft tissue look like tissue instead of like
+ * the interface.
+ *
+ * There is one accent, an instrument amber, and it is spent only on the thing
+ * that is live: the pane under the pointer, the series being read. Everything
+ * else is grey on grey, which is the point — nothing in the frame should
+ * compete with the image.
+ */
+
+:root {
+  --ink: #e8edf2;
+  --ink-dim: #97a3b0;
+  --ink-faint: #5d6975;
+
+  --surface: #0d1117;
+  --surface-raised: #151b23;
+  --surface-sunken: #090c11;
+  --line: #232c38;
+  --line-bright: #33404f;
+
+  --live: #f0a92e;
+  --live-dim: #6b4c14;
+
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'Cascadia Mono', 'SF Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: 13px/1.5 var(--font);
+  /* A reading application is not a document: nothing here is selectable by
+     accident, and a drag never turns into a text selection. */
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+::selection {
+  background: var(--live-dim);
+}
+
+/* ---- the window ---------------------------------------------------------- */
+
+.shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 20px;
+  padding: 22px 24px 0;
+}
+
+.shell--empty {
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.masthead__note {
+  margin: 4px 0 0;
+  color: var(--ink-faint);
+}
+
+/* ---- the desk ------------------------------------------------------------ */
+
+.desk {
+  min-height: 0;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 18px;
+  display: grid;
+  place-items: center;
+}
+
+.desk-map {
+  width: 100%;
+  height: 100%;
+}
+
+/* Stroke widths are in the coordinate space of the desk, which is thousands of
+   pixels wide, so they are set as a share of it rather than in points. */
+/* Named rather than "any rect inside a pane": the work area below is also a
+   rect, and the primary rule was repainting it amber as though the dashed
+   outline were itself the primary screen. */
+.pane__glass {
+  fill: var(--surface-raised);
+  stroke: var(--line-bright);
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.pane--primary .pane__glass {
+  stroke: var(--live);
+}
+
+.pane__work-area {
+  fill: none;
+  stroke: var(--line-bright);
+  stroke-dasharray: 5 6;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.pane__label,
+.pane__size {
+  fill: var(--ink-dim);
+  text-anchor: middle;
+  font-family: var(--font);
+  /* SVG text scales with the viewBox, and a desk can be 1920 or 7680 units
+     wide. Sizing in the same units as the geometry keeps the label the same
+     apparent size on any desk. */
+  font-size: 46px;
+}
+
+.pane--primary .pane__label {
+  fill: var(--ink);
+}
+
+.pane__size {
+  fill: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 38px;
+}
+
+/* ---- the numbers --------------------------------------------------------- */
+
+.ledger {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ledger__row {
+  flex: 1 1 260px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: var(--surface-raised);
+}
+
+.ledger__row h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--live);
+  border: 1px solid var(--live-dim);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.tag--quiet {
+  color: var(--ink-faint);
+  border-color: var(--line-bright);
+}
+
+.ledger__row dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 14px;
+}
+
+.ledger__row dl > div {
+  display: contents;
+}
+
+.ledger__row dt {
+  color: var(--ink-faint);
+}
+
+.ledger__row dd {
+  margin: 0;
+  font-family: var(--mono);
+  color: var(--ink-dim);
+}
+
+/* ---- the strip along the bottom ------------------------------------------ */
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  margin: 0 -24px;
+  padding: 8px 24px;
+  background: var(--surface-sunken);
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.status__key {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.status__value {
+  font-family: var(--mono);
+  color: var(--live);
+}
+
+.status__spacer {
+  flex: 1;
+}
+
+.status__muted {
+  font-family: var(--mono);
+}

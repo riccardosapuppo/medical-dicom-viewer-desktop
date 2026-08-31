@@ -26,7 +26,7 @@ const only = onlyAt === -1 ? undefined : process.argv[onlyAt + 1];
 
 const entries = fs
   .readdirSync(source)
-  .filter(name => name.endsWith('.test.ts'))
+  .filter(name => name.endsWith('.test.ts') || name.endsWith('.test.tsx'))
   .filter(name => !only || name.includes(only))
   .map(name => path.join(source, name));
 
@@ -46,6 +46,7 @@ await esbuild.build({
   platform: 'node',
   target: 'node20',
   format: 'cjs',
+  jsx: 'automatic',
   sourcemap: 'inline',
   // Native and optional bits of the DICOM parser are better required at run
   // time than bundled: esbuild resolves them differently than Node does.

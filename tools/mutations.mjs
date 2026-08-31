@@ -118,6 +118,24 @@ const MUTATIONS = [
     'header: a text file is treated as a corrupt image instead of skipped',
   ],
   [
+    'src/renderer/DeskMap.tsx',
+    '  const left = Math.min(...panes.map(p => p.bounds.x));',
+    '  const left = 0;',
+    'map: a screen left of the primary is drawn off the canvas',
+  ],
+  [
+    'src/renderer/DeskMap.tsx',
+    '              height={pane.workArea.height}',
+    '              height={pane.bounds.height}',
+    'map: the work area is drawn as the full screen',
+  ],
+  [
+    'src/renderer/DeskMap.tsx',
+    "className={pane.isPrimary ? 'pane pane--primary' : 'pane'}",
+    "className={'pane'}",
+    'map: nothing marks which screen is primary',
+  ],
+  [
     'src/main/dicom/build-index.ts',
     '    if (seen.has(header.sopInstanceUid)) {',
     '    if (false) {',

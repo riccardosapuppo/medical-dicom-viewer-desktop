@@ -9,18 +9,33 @@ an independent reimplementation, written from scratch with synthetic data.
 
 ## Where it is
 
-Early, and honest about it. What exists is the part everything else stands on:
-reading the desk, and reading a folder of DICOM files into a reading list.
-There is no window yet.
+Early, and honest about it. There is a window, and it shows the desk it is
+running on. It does not show a study yet.
 
 ```
 npm install
+npm start                  # builds and opens the window
 npm run demo-data          # writes ~17 MB of synthetic studies into ./demo-data
 npm run index -- ./demo-data
-npm run displays           # what screens are attached, and this desk's fingerprint
+npm run displays           # the same reading, printed, with no window
 npm test
 npm run mutations          # breaks the code on purpose, checks the tests notice
 ```
+
+![The desk](docs/desk.png)
+
+The window is the shape the rest of the application will hang off: one instance
+(a second launch hands its arguments to the first, which is how a study opened
+from the file manager will arrive), context isolation on, node integration off,
+the sandbox on, and a preload that lists by name the entire set of things the
+page is allowed to ask for. A viewer that renders whatever a study happens to
+contain has no business reaching the file system directly.
+
+The map redraws when the desk changes. Plugging in a monitor, unplugging one or
+changing a scaling factor invalidates every window placement the application
+might have remembered, and the fingerprint at the bottom left is what tells it
+so — it is sent to the page only when it actually moves, so a colour profile
+change or a refresh rate switch does not cause a redraw at nothing.
 
 ## Reading a folder
 
@@ -117,10 +132,16 @@ one inclusion to find.
 
 ## Limits, honestly
 
-- No viewer, no windows, no rendering yet. Reading the desk and reading a
-  folder is the whole of it.
-- Verified on Windows 11 against a single built-in screen. The multi-monitor
-  behaviour is covered by tests with invented desks, not by hardware.
+- No study opens yet. The window shows the desk; the indexer runs from the
+  command line. Wiring one to the other is the next thing.
+- The window opens on the primary screen at a workable size. Placing it on the
+  reporting monitor, and putting it back where it was, is what the fingerprint
+  is for and is not built yet.
+- Verified on Windows 11 against a single built-in screen. Every multi-monitor
+  case here — a screen to the left of the primary and so at negative
+  coordinates, a portrait pair, a taskbar taking space off one edge — is
+  covered by tests against invented desks, because inventing one is the only
+  way to test it without owning it. None of it has met real hardware.
 - Explicit and implicit VR little endian are read, and both are covered by
   tests. Big endian is not handled. Compressed transfer syntaxes read their
   headers fine, which is all the index needs, but nothing decodes pixel data

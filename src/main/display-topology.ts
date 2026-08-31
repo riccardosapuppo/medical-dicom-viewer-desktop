@@ -91,6 +91,24 @@ export function readTopology(screen: Electron.Screen): Topology {
   return { panes, primaryId: primary.id };
 }
 
+/** A reading of the desk together with the name for it. */
+export interface Desk extends Topology {
+  fingerprint: string;
+}
+
+/**
+ * The desk and its fingerprint in one object.
+ *
+ * Anything outside this module that needs both should ask for both here rather
+ * than hashing the topology again: two places computing the same digest are two
+ * places that can come to disagree, and the one that decides where windows go
+ * has to win.
+ */
+export function readDesk(screen: Electron.Screen): Desk {
+  const topology = readTopology(screen);
+  return { ...topology, fingerprint: fingerprint(topology) };
+}
+
 /** What a pane looks like once identity is thrown away. */
 interface NormalisedPane {
   width: number;

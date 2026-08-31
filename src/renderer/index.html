@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      No remote anything. The page loads from disk, its scripts come from the
+      same folder, and the only channel out is the one the preload opened. Said
+      here as well as in the window options because a policy in one place is a
+      policy someone can move.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: dicom:; connect-src 'self'"
+    />
+    <title>DICOM Workstation</title>
+    <link rel="stylesheet" href="./index.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

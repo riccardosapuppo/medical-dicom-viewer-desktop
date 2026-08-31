@@ -4,7 +4,7 @@
   "private": true,
   "description": "A reading-room workstation: native windows placed on the panes of glass they belong to, arrangements that come back, and studies read from disk.",
   "license": "MIT",
-  "main": "dist/displays-report.js",
+  "main": "dist/app/main.js",
   "scripts": {
     "build:main": "esbuild tools/displays-report.ts --bundle --platform=node --target=node20 --format=cjs --external:electron --outfile=dist/displays-report.js",
     "displays": "npm run build:main && electron dist/displays-report.js",
@@ -13,10 +13,14 @@
     "mutations": "node tools/mutations.mjs",
     "build:index": "esbuild tools/index-report.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index-report.js",
     "index": "npm run build:index && node dist/index-report.js",
-    "demo-data": "esbuild tools/make-demo-data.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/make-demo-data.js && node dist/make-demo-data.js"
+    "demo-data": "esbuild tools/make-demo-data.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/make-demo-data.js && node dist/make-demo-data.js",
+    "build": "node tools/build-app.mjs",
+    "start": "npm run build && electron ."
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "electron": "^33.3.1",
     "esbuild": "^0.24.2",
     "typescript": "^5.7.2"
@@ -26,6 +30,8 @@
     "esbuild@0.24.2": true
   },
   "dependencies": {
-    "dicom-parser": "^1.8.21"
+    "dicom-parser": "^1.8.21",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }
