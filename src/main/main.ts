@@ -12,14 +12,31 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { app, BrowserWindow, ipcMain, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron';
 
 import { describe, readDesk, type Desk } from './display-topology';
+import { Indexer } from './library/indexer-host';
 
 /** Where the built renderer lives, relative to the compiled main process. */
 const RENDERER = path.join(__dirname, 'renderer', 'index.html');
 
 let mainWindow: BrowserWindow | undefined;
+
+/**
+ * The folder to open, from a command line.
+ *
+ * The renderer is asked to open it rather than the main process just reading
+ * it: the window owns what it is showing, and a folder that appeared underneath
+ * it without its knowledge is a list that cannot be cancelled or replaced.
+ */
+function folderFromArgs(argv: string[]): string | undefined {
+  const at = argv.indexOf('--open');
+  const given = at === -1 ? undefined : argv[at + 1];
+  // Resolved here rather than wherever it is used: a relative path means
+  // whatever the working directory happened to be, which for a packaged
+  // application is not a thing anyone can point at.
+  return given === undefined ? undefined : path.resolve(given);
+}
 
 function createWindow(): BrowserWindow {
   // Opening at the size of the smallest sensible desk and letting the system
@@ -72,12 +89,19 @@ function createWindow(): BrowserWindow {
 if (!app.requestSingleInstanceLock()) {
   app.exit(0);
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) {
         mainWindow.restore();
       }
       mainWindow.focus();
+
+      // This is how a study opened from the file manager arrives: a second
+      // launch that hands its arguments over instead of starting a rival copy.
+      const folder = folderFromArgs(argv);
+      if (folder) {
+        mainWindow.webContents.send('library:open', folder);
+      }
     }
   });
 
@@ -104,11 +128,49 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('desk:read', () => desk);
 
+    // Reading a folder happens in a process of its own; everything the window
+    // hears about it comes through here.
+    const indexer = new Indexer();
+    indexer.on(message => mainWindow?.webContents.send('library:message', message));
+    app.on('will-quit', () => indexer.stop());
+
+    ipcMain.handle('library:read', (_event, folder: unknown) => {
+      if (typeof folder !== 'string' || folder.length === 0) {
+        return;
+      }
+      indexer.read(folder);
+    });
+
+    ipcMain.handle('library:cancel', () => indexer.cancel());
+
+    // The dialog belongs to the main process because it belongs to the window:
+    // opened from the page it would be a modal with no owner, which on Windows
+    // is a dialog that can end up behind the application that raised it.
+    ipcMain.handle('library:choose', async () => {
+      const owner = mainWindow;
+      if (!owner) {
+        return undefined;
+      }
+      const { canceled, filePaths } = await dialog.showOpenDialog(owner, {
+        title: 'Open a folder of DICOM studies',
+        properties: ['openDirectory'],
+        buttonLabel: 'Read',
+      });
+      return canceled ? undefined : filePaths[0];
+    });
+
     if (process.argv.includes('--print-desk')) {
       process.stdout.write(`\n${describe(desk)}\n\n`);
     }
 
     mainWindow = createWindow();
+
+    const opening = folderFromArgs(process.argv);
+    if (opening && !process.argv.includes('--capture')) {
+      mainWindow.webContents.once('did-finish-load', () =>
+        mainWindow?.webContents.send('library:open', opening)
+      );
+    }
 
     // The screenshots in docs/ are taken by the application itself rather than
     // by a screen capture, so they are always the current build at a fixed size
@@ -118,6 +180,12 @@ if (!app.requestSingleInstanceLock()) {
       const target = process.argv[captureAt + 1];
       const window = mainWindow;
       window.webContents.once('did-finish-load', () => {
+        // Whatever --open asked for has to be on screen before the shutter, and
+        // it is the renderer that starts that read.
+        const folder = folderFromArgs(process.argv);
+        if (folder) {
+          window.webContents.send('library:open', folder);
+        }
         // A frame after load: React has mounted but the desk has not arrived
         // over IPC yet, and a screenshot of "Reading the desk..." is not a
         // screenshot of the application.
@@ -130,7 +198,7 @@ if (!app.requestSingleInstanceLock()) {
             }
             app.exit(0);
           });
-        }, 1200);
+        }, folderFromArgs(process.argv) ? 2500 : 1200);
       });
     }
 

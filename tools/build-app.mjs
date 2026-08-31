@@ -41,6 +41,20 @@ const main = {
 };
 
 /**
+ * The indexing process. Node with the disk and no window, forked by the main
+ * process. Its own bundle because it is its own program.
+ */
+const indexer = {
+  ...shared,
+  entryPoints: ['src/main/library/indexer-process.ts'],
+  outfile: path.join(out, 'indexer.js'),
+  platform: 'node',
+  target: 'node20',
+  format: 'cjs',
+  external: ['electron'],
+};
+
+/**
  * The preload. Same shape as the main process, different file, and deliberately
  * its own build: it must never accidentally pull in something from the main
  * process that would then be reachable from the page.
@@ -82,7 +96,7 @@ function copyStatic() {
 copyStatic();
 
 if (watch) {
-  const contexts = await Promise.all([main, preload, renderer].map(esbuild.context));
+  const contexts = await Promise.all([main, indexer, preload, renderer].map(esbuild.context));
   await Promise.all(contexts.map(c => c.watch()));
   fs.watch(path.join(root, 'src', 'renderer'), (_event, name) => {
     if (name === 'index.html' || name === 'index.css') {
@@ -91,6 +105,6 @@ if (watch) {
   });
   console.log('watching');
 } else {
-  await Promise.all([main, preload, renderer].map(esbuild.build));
+  await Promise.all([main, indexer, preload, renderer].map(esbuild.build));
   console.log(`built into ${path.relative(root, out)}`);
 }

@@ -59,9 +59,16 @@ body {
 .shell {
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  gap: 20px;
-  padding: 22px 24px 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 18px 24px 0;
+}
+
+/* A folder being dragged over the window: one line, no overlay. An overlay
+   that covers the list is an overlay that hides where the drop is going. */
+.shell--dragging {
+  outline: 1px dashed var(--live);
+  outline-offset: -6px;
 }
 
 .shell--empty {
@@ -70,28 +77,108 @@ body {
   color: var(--ink-faint);
 }
 
+.masthead {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 14px;
+}
+
 .masthead h1 {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .masthead__note {
-  margin: 4px 0 0;
+  margin: 0;
   color: var(--ink-faint);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.masthead__note--path {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.masthead__actions {
+  display: flex;
+  gap: 8px;
+  align-self: center;
+}
+
+.button {
+  font: inherit;
+  color: var(--ink-dim);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.button:hover {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+}
+
+.button--primary {
+  color: var(--live);
+  border-color: var(--live-dim);
+}
+
+.button--primary:hover {
+  border-color: var(--live);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: 1px;
 }
 
 /* ---- the desk ------------------------------------------------------------ */
 
-.desk {
+.panel {
   min-height: 0;
   background: var(--surface-sunken);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 18px;
+}
+
+.panel--centred {
   display: grid;
   place-items: center;
+  padding: 18px;
+}
+
+.panel--list {
+  overflow: auto;
+  padding: 0;
+}
+
+.desk {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.desk__caption {
+  max-width: 52ch;
+  text-align: center;
+}
+
+.muted {
+  color: var(--ink-faint);
+  margin: 0;
 }
 
 .desk-map {
@@ -144,68 +231,6 @@ body {
   font-size: 38px;
 }
 
-/* ---- the numbers --------------------------------------------------------- */
-
-.ledger {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.ledger__row {
-  flex: 1 1 260px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 12px 14px;
-  background: var(--surface-raised);
-}
-
-.ledger__row h2 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tag {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--live);
-  border: 1px solid var(--live-dim);
-  border-radius: 3px;
-  padding: 1px 5px;
-}
-
-.tag--quiet {
-  color: var(--ink-faint);
-  border-color: var(--line-bright);
-}
-
-.ledger__row dl {
-  margin: 0;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 3px 14px;
-}
-
-.ledger__row dl > div {
-  display: contents;
-}
-
-.ledger__row dt {
-  color: var(--ink-faint);
-}
-
-.ledger__row dd {
-  margin: 0;
-  font-family: var(--mono);
-  color: var(--ink-dim);
-}
-
 /* ---- the strip along the bottom ------------------------------------------ */
 
 .status {
@@ -236,4 +261,248 @@ body {
 
 .status__muted {
   font-family: var(--mono);
+}
+
+/* ---- reading a folder ---------------------------------------------------- */
+
+.reading {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  max-width: 46ch;
+  text-align: center;
+}
+
+.reading__count {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 28px;
+  color: var(--ink);
+}
+
+.reading__of {
+  color: var(--ink-faint);
+  font-size: 15px;
+}
+
+.reading__bar {
+  width: 320px;
+  height: 3px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.reading__fill {
+  height: 100%;
+  background: var(--live);
+  /* Slower than the messages arrive, so a bar that jumps a percent at a time
+     reads as movement rather than as a stutter. */
+  transition: width 180ms linear;
+}
+
+.failure {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  max-width: 60ch;
+  text-align: center;
+}
+
+.failure h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.failure__reason {
+  margin: 0;
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+/* ---- the reading list ---------------------------------------------------- */
+
+.library {
+  padding: 4px 0 16px;
+}
+
+.library--empty {
+  display: grid;
+  gap: 6px;
+  place-items: center;
+  padding: 60px 0;
+}
+
+.patient__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.patient__head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.patient__id,
+.patient__sex,
+.patient__studies {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.patient__studies {
+  margin-left: auto;
+}
+
+.study {
+  border-bottom: 1px solid var(--line);
+}
+
+.study__head {
+  display: grid;
+  grid-template-columns: 17ch minmax(0, 1fr) 6ch 17ch 12ch 4ch;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 16px;
+  font: inherit;
+  color: var(--ink-dim);
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.study__head:hover {
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+.study__head:focus-visible {
+  outline: 1px solid var(--live);
+  outline-offset: -2px;
+}
+
+.study__date {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.study__time {
+  color: var(--ink-faint);
+  margin-left: 6px;
+}
+
+.study__description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.study__modalities,
+.study__counts,
+.study__accession,
+.study__age {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.study__modalities {
+  color: var(--ink-dim);
+}
+
+.series-list {
+  margin: 0;
+  padding: 0 16px 10px 29px;
+  list-style: none;
+}
+
+.series {
+  display: grid;
+  grid-template-columns: 4ch minmax(0, 1fr) 8ch 11ch 12ch;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.series__number,
+.series__count,
+.series__shape,
+.series__order {
+  font-family: var(--mono);
+  color: var(--ink-faint);
+}
+
+.series__number {
+  text-align: right;
+}
+
+.series__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A stack put in order by number rather than by position may be upside down.
+   Not an error, but not the same claim either. */
+.series__order--weak {
+  color: var(--live);
+  opacity: 0.7;
+}
+
+.unreadable {
+  margin: 18px 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--live-dim);
+  border-radius: 5px;
+}
+
+.unreadable h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--live);
+}
+
+.unreadable ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+
+.unreadable li {
+  display: grid;
+  grid-template-columns: 26ch 1fr;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.unreadable__file {
+  color: var(--ink-dim);
+}
+
+.unreadable__reason {
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

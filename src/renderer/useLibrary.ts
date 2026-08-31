@@ -1,0 +1,106 @@
+/**
+ * The folder being read, and what came back.
+ *
+ * All the awkwardness of an operation that takes seconds lives here: it can be
+ * running, it can be replaced by another one before it finishes, it can fail,
+ * and the answer arrives in pieces over a channel rather than as a returned
+ * value. The components below get a single state to render and nothing to
+ * coordinate.
+ */
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import type { Index } from '../main/dicom/build-index';
+import type { UnreadableFile } from '../main/dicom/read-header';
+
+export interface LibraryReading {
+  folder: string;
+  index: Index;
+  read: number;
+  skipped: number;
+  unreadable: UnreadableFile[];
+  elapsedMs: number;
+}
+
+export type LibraryState =
+  | { status: 'empty' }
+  | { status: 'reading'; folder: string; done: number; total: number }
+  | { status: 'ready'; reading: LibraryReading }
+  | { status: 'failed'; folder: string; reason: string };
+
+export interface Library {
+  state: LibraryState;
+  open: () => void;
+  read: (folder: string) => void;
+  cancel: () => void;
+}
+
+export function useLibrary(): Library {
+  const [state, setState] = useState<LibraryState>({ status: 'empty' });
+
+  // Which folder the window is currently interested in. A message about any
+  // other one is the tail of a reading that was replaced, and rendering it
+  // would swap the list back to the folder the user just left.
+  const wanted = useRef<string | undefined>(undefined);
+
+  useEffect(
+    () =>
+      window.workstation.onLibrary(message => {
+        if (message.type === 'progress') {
+          setState(current =>
+            current.status === 'reading'
+              ? { ...current, done: message.done, total: message.total }
+              : current
+          );
+          return;
+        }
+
+        if (message.folder !== wanted.current) {
+          return;
+        }
+
+        if (message.type === 'failed') {
+          setState({ status: 'failed', folder: message.folder, reason: message.reason });
+          return;
+        }
+
+        setState({
+          status: 'ready',
+          reading: {
+            folder: message.folder,
+            index: message.index,
+            read: message.read,
+            skipped: message.skipped,
+            unreadable: message.unreadable,
+            elapsedMs: message.elapsedMs,
+          },
+        });
+      }),
+    []
+  );
+
+  const read = useCallback((folder: string) => {
+    wanted.current = folder;
+    setState({ status: 'reading', folder, done: 0, total: 0 });
+    void window.workstation.readFolder(folder);
+  }, []);
+
+  const open = useCallback(() => {
+    void window.workstation.chooseFolder().then(folder => {
+      if (folder) {
+        read(folder);
+      }
+    });
+  }, [read]);
+
+  const cancel = useCallback(() => {
+    wanted.current = undefined;
+    void window.workstation.cancelReading();
+    setState({ status: 'empty' });
+  }, []);
+
+  // A folder named on the command line, or handed over by a second launch.
+  // Registered after `read` exists so the listener always has the current one.
+  useEffect(() => window.workstation.onOpenRequest(read), [read]);
+
+  return { state, open, read, cancel };
+}

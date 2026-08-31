@@ -118,6 +118,30 @@ const MUTATIONS = [
     'header: a text file is treated as a corrupt image instead of skipped',
   ],
   [
+    'src/renderer/format.ts',
+    '  return years >= 0 && years < 130 ?',
+    '  return true ?',
+    'format: an impossible age is printed rather than withheld',
+  ],
+  [
+    'src/renderer/format.ts',
+    '  return month ? ',
+    '  return true ? ',
+    'format: a month outside the calendar is given a name',
+  ],
+  [
+    'src/renderer/format.ts',
+    '  const separator = full.includes(BACKSLASH) ?',
+    "  const separator = false ?",
+    'format: a Windows path is shown with the wrong separator',
+  ],
+  [
+    'src/main/dicom/index-folder.ts',
+    "  if (code === 'ENOENT') {",
+    '  if (false) {',
+    'walk: a missing folder falls back to the raw syscall error',
+  ],
+  [
     'src/renderer/DeskMap.tsx',
     '  const left = Math.min(...panes.map(p => p.bounds.x));',
     '  const left = 0;',

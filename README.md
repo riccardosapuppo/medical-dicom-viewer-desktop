@@ -9,34 +9,53 @@ an independent reimplementation, written from scratch with synthetic data.
 
 ## Where it is
 
-Early, and honest about it. There is a window, and it shows the desk it is
-running on. It does not show a study yet.
+Early, and honest about it. A folder of studies opens and reads into a
+worklist. Nothing displays an image yet.
 
 ```
 npm install
-npm start                  # builds and opens the window
 npm run demo-data          # writes ~17 MB of synthetic studies into ./demo-data
-npm run index -- ./demo-data
-npm run displays           # the same reading, printed, with no window
+npm start                  # builds and opens the window
+npm start -- --open ./demo-data
+npm run index -- ./demo-data   # the same reading, in the terminal, no window
+npm run displays           # what screens are attached, and this desk's fingerprint
 npm test
 npm run mutations          # breaks the code on purpose, checks the tests notice
 ```
 
+![The reading list](docs/library.png)
+
+Drop a folder anywhere in the window, choose one, or name it on the command
+line. A second launch hands its arguments to the first rather than starting a
+rival copy, which is how a study opened from the file manager will arrive.
+
+## Where the reading happens
+
+Not in the window, and not in the page.
+
+A thousand headers is a thousand file opens and a thousand parses. In the main
+process that blocks the event loop and the window stops repainting — the
+application looks hung at exactly the moment it is working hardest. In the
+renderer it would mean handing a page the file system, which is the one thing
+a viewer that renders whatever a study contains should not have.
+
+So it happens in a utility process: Node, with the disk, and no window. It
+reports progress once per percent rather than once per file, because on a fast
+disk the messages cost more than the reading. Picking a second folder while the
+first is still going aborts it — finishing would send back a list for a folder
+nobody is looking at any more. If the process dies mid-folder the window is told
+which folder was lost, instead of watching a progress bar that will never move
+again.
+
 ![The desk](docs/desk.png)
 
-The window is the shape the rest of the application will hang off: one instance
-(a second launch hands its arguments to the first, which is how a study opened
-from the file manager will arrive), context isolation on, node integration off,
-the sandbox on, and a preload that lists by name the entire set of things the
-page is allowed to ask for. A viewer that renders whatever a study happens to
-contain has no business reaching the file system directly.
-
-The map redraws when the desk changes. Plugging in a monitor, unplugging one or
-changing a scaling factor invalidates every window placement the application
-might have remembered, and the fingerprint at the bottom left is what tells it
-so — it is sent to the page only when it actually moves, so a colour profile
-change or a refresh rate switch does not cause a redraw at nothing.
-
+With no folder open the window shows the desk it is standing on, drawn to
+scale. That is not a placeholder: everything this application will do is place
+windows on those panes and put them back where they were, and being able to see
+the arrangement it believes in is what makes that debuggable rather than magic.
+It redraws when a monitor is plugged, unplugged or rescaled — and only when the
+fingerprint actually moves, since the same event also fires for a colour profile
+change, which moves no window.
 ## Reading a folder
 
 `npm run index -- ./demo-data` walks a folder, reads every DICOM header it
@@ -77,19 +96,7 @@ readmes, thumbnails and the viewer that came on the disc are counted and passed
 over. A file that claims to be DICOM and will not parse is a different thing
 entirely — that is a missing slice — so it is reported by name.
 
-## The desk
-
-`npm run displays` opens no window. It prints one block per screen and a digest
-of the arrangement:
-
-```
-Screen 1  (primary, built-in)
-  1920x1200 real pixels   scale 1.25x   1536x960 points
-  at 0,0 from the primary   rotation 0deg   60 Hz   24 bit
-  usable 1536x912 at 0,0  (the system keeps the rest)
-
-Desk fingerprint: b60acb6761b2
-```
+## Why a fingerprint, and not the screen id
 
 The operating system hands out an id for every display, and it is the obvious
 key for remembering where a radiologist put their windows. It is also the wrong
@@ -132,8 +139,8 @@ one inclusion to find.
 
 ## Limits, honestly
 
-- No study opens yet. The window shows the desk; the indexer runs from the
-  command line. Wiring one to the other is the next thing.
+- No image is displayed yet. A folder reads into a worklist; opening a series
+  is the next thing.
 - The window opens on the primary screen at a workable size. Placing it on the
   reporting monitor, and putting it back where it was, is what the fingerprint
   is for and is not built yet.

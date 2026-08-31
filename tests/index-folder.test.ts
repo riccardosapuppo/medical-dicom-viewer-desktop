@@ -108,3 +108,24 @@ test('progress is reported all the way to the end', async () => {
   assert.equal(Math.max(...seen), 6);
   assert.ok(result.elapsedMs >= 0);
 });
+
+test('a folder that is not there is explained in a sentence', async () => {
+  // The message Node raises names a syscall and quotes the path twice. Someone
+  // who dropped the wrong thing on the window needs to know which of three
+  // things happened.
+  const missing = path.join(scratch, 'no-such-folder');
+
+  await assert.rejects(
+    () => indexFolder(missing),
+    (error: Error) => error.message === `There is nothing at ${missing}.`
+  );
+});
+
+test('a file dropped instead of a folder says so', async () => {
+  const file = path.join(scratch, 'README.TXT');
+
+  await assert.rejects(
+    () => indexFolder(file),
+    (error: Error) => /is a file, not a folder/.test(error.message)
+  );
+});

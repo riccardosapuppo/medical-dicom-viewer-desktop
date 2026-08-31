@@ -8,9 +8,10 @@
  * whatever a study contains has no business being able to read the disk
  * directly, and this is where that is decided rather than hoped for.
  */
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 import type { Desk } from '../main/display-topology';
+import type { FromIndexer } from '../main/library/messages';
 
 const api = {
   /** The desk as it is right now. */
@@ -29,6 +30,37 @@ const api = {
     ipcRenderer.on('desk:changed', listener);
     return () => ipcRenderer.off('desk:changed', listener);
   },
+
+  /** Opens the folder chooser. Resolves to undefined if the user changed their mind. */
+  chooseFolder: (): Promise<string | undefined> => ipcRenderer.invoke('library:choose'),
+
+  /** Starts reading a folder. Everything after this arrives through onLibrary. */
+  readFolder: (folder: string): Promise<void> => ipcRenderer.invoke('library:read', folder),
+
+  cancelReading: (): Promise<void> => ipcRenderer.invoke('library:cancel'),
+
+  /** A folder the application was asked to open: a command line, or a second launch. */
+  onOpenRequest: (handler: (folder: string) => void): (() => void) => {
+    const listener = (_event: unknown, folder: string): void => handler(folder);
+    ipcRenderer.on('library:open', listener);
+    return () => ipcRenderer.off('library:open', listener);
+  },
+
+  onLibrary: (handler: (message: FromIndexer) => void): (() => void) => {
+    const listener = (_event: unknown, message: FromIndexer): void => handler(message);
+    ipcRenderer.on('library:message', listener);
+    return () => ipcRenderer.off('library:message', listener);
+  },
+
+  /**
+   * The path behind a dropped folder.
+   *
+   * A dropped File used to carry its own path, and no longer does: reading it
+   * off the object was a hole, because a page could then learn where anything
+   * it was handed lives on disk. Now it takes a deliberate call, and this is
+   * the only place that makes it.
+   */
+  pathOfDropped: (file: File): string => webUtils.getPathForFile(file),
 
   platform: process.platform,
   versions: {

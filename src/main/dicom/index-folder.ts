@@ -65,9 +65,39 @@ async function listFiles(root: string): Promise<string[]> {
   return found.sort();
 }
 
+/**
+ * What went wrong with the folder itself, in a sentence.
+ *
+ * The message Node raises is accurate and unreadable: it names a syscall and
+ * quotes the path twice. Someone who dropped the wrong thing on the window
+ * needs to know which of three things happened, and the raw text is kept for
+ * whoever is looking at a log.
+ */
+function explainFolderError(root: string, error: unknown): string {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  const detail = error instanceof Error ? error.message : String(error);
+
+  if (code === 'ENOENT') {
+    return `There is nothing at ${root}.`;
+  }
+  if (code === 'ENOTDIR') {
+    return `${root} is a file, not a folder. Open the folder that contains it.`;
+  }
+  if (code === 'EACCES' || code === 'EPERM') {
+    return `${root} cannot be read: the system refused permission.`;
+  }
+  return detail;
+}
+
 export async function indexFolder(root: string, options: IndexOptions = {}): Promise<IndexResult> {
   const startedAt = process.hrtime.bigint();
-  const files = await listFiles(root);
+
+  let files: string[];
+  try {
+    files = await listFiles(root);
+  } catch (error) {
+    throw new Error(explainFolderError(root, error));
+  }
 
   const headers: InstanceHeader[] = [];
   const unreadable: UnreadableFile[] = [];
