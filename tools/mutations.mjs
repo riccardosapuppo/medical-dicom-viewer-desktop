@@ -65,9 +65,9 @@ const MUTATIONS = [
   ],
   [
     'src/main/dicom/read-header.ts',
-    '        length = Math.min(length * 2, size);',
-    '        length = size + 1;',
-    'header: a header bigger than the first read is given up on',
+    '        if (length >= size) {',
+    '        if (true) {',
+    'header: the reader gives up instead of reading more',
   ],
   [
     'src/main/dicom/read-header.ts',
@@ -95,9 +95,9 @@ const MUTATIONS = [
   ],
   [
     'src/main/dicom/index-folder.ts',
+    "      } else if (entry.isFile() && entry.name.toLowerCase() !== DIRECTORY_RECORD) {",
     "      } else if (entry.isFile() && entry.name !== DIRECTORY_RECORD) {",
-    '      } else if (entry.isFile()) {',
-    'walk: the directory record is indexed as though it were a study',
+    'walk: a lowercase directory record is indexed as a phantom study',
   ],
   [
     'src/main/dicom/index-folder.ts',
@@ -116,6 +116,12 @@ const MUTATIONS = [
     '        if (buffer.toString(',
     '        if (false && buffer.toString(',
     'header: a text file is treated as a corrupt image instead of skipped',
+  ],
+  [
+    "src/main/dicom/read-header.ts",
+    "        if (dataSet.elements[PIXEL_DATA] === undefined && length < size && length < MAX_HEADER) {",
+    "        if (false) {",
+    "header: a header cut on an element boundary is read short in silence",
   ],
   [
     "src/renderer/viewer/transform.ts",
@@ -176,6 +182,48 @@ const MUTATIONS = [
     "    area: count * frame.spacing.x * frame.spacing.y,",
     "    area: count,",
     "measure: the area is in pixels rather than square millimetres",
+  ],
+  [
+    "src/main/dicom/build-index.ts",
+    "    if (!header.sopInstanceUid) {",
+    "    if (false) {",
+    "index: images with no UID are all counted as copies of one another",
+  ],
+  [
+    "src/main/dicom/index-folder.ts",
+    "        inOrder[i] = await readHeader(filePath);",
+    "        inOrder[inOrder.length] = await readHeader(filePath);",
+    "walk: the index depends on which reader finishes first",
+  ],
+  [
+    "src/main/dicom/index-folder.ts",
+    "      if (signal?.aborted) {\n        return;\n      }",
+    "      if (false) {\n        return;\n      }",
+    "walk: a cancel cannot stop the directory walk",
+  ],
+  [
+    "src/main/library/pixel-server.ts",
+    "    const usable = Math.min(pixels.numberOfFrames, available);",
+    "    const usable = pixels.numberOfFrames;",
+    "pixels: a frame past the data that is there is answered with a body that cannot fill",
+  ],
+  [
+    "src/main/library/pixel-server.ts",
+    "    if (!frameBytes) {",
+    "    if (frameBytes === undefined) {",
+    "pixels: a frame of no size is served for ever",
+  ],
+  [
+    "src/main/library/pixel-server.ts",
+    "      name = decodeURIComponent(uid);",
+    "      name = decodeURIComponent(uid) + String(0);",
+    "pixels: a mangled UID is looked up as something else",
+  ],
+  [
+    "src/main/library/indexing.ts",
+    "          if (controller.signal.aborted) {\n            return;\n          }",
+    "          if (false) {\n            return;\n          }",
+    "indexer: progress from an abandoned folder is sent anyway",
   ],
   [
     "src/main/layout/panes.ts",
@@ -294,8 +342,20 @@ const MUTATIONS = [
   [
     "src/main/library/pixel-server.ts",
     "    this.#images = images;",
-    "    for (const [key, value] of images) {\\n      this.#images.set(key, value);\\n    }",
+    "    for (const [key, value] of images) {\n      this.#images.set(key, value);\n    }",
     "pixels: a closed folder stays reachable",
+  ],
+  [
+    "src/renderer/Library.tsx",
+    "    if (reading.unreadable.length > 0) {",
+    "    if (false) {",
+    "worklist: a folder of broken images reports that it was empty",
+  ],
+  [
+    "src/renderer/format.ts",
+    "  return `${patient.patientId}|${patient.name}`;",
+    "  return patient.patientId;",
+    "worklist: two unidentified patients are listed under one key",
   ],
   [
     'src/renderer/format.ts',
@@ -362,23 +422,46 @@ const restore = () => {
   }
 };
 process.on('exit', restore);
+// 'exit' does not run for a signal, so Ctrl-C in the middle of a run would
+// otherwise leave a mutated file in the working tree for somebody to find
+// later and puzzle over.
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => {
+    restore();
+    process.exit(130);
+  });
+}
 
-/** How many tests fail right now. */
-function redCount() {
+/**
+ * Runs the suite and says what happened.
+ *
+ * "broken" is not the same as "failed": a build that will not compile produces
+ * no count at all, and treating that as a failing test is how a mutation that
+ * never ran gets recorded as caught.
+ */
+function runTests() {
+  let out;
   try {
-    const out = execSync('npm test', { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    return Number(/^S* fail (d+)$/m.exec(out)?.[1] ?? 0);
+    out = execSync('npm test', { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (e) {
-    return Number(/^S* fail (d+)$/m.exec(String(e.stdout ?? ''))?.[1] ?? 1);
+    out = String(e.stdout ?? '') + String(e.stderr ?? '');
   }
+
+  const counted = /^\S* fail (\d+)$/m.exec(out);
+  return counted ? { failed: Number(counted[1]), broken: false } : { failed: 0, broken: true };
 }
 
 // A suite that is already failing makes every mutation look caught, and the
 // report comes out perfect while proving nothing at all.
-const alreadyRed = redCount();
-if (alreadyRed > 0) {
+const baseline = runTests();
+if (baseline.broken) {
+  console.error('The tests do not build. Fix that first: nothing below would mean anything.');
+  process.exit(2);
+}
+if (baseline.failed > 0) {
   console.error(
-    `${alreadyRed} test${alreadyRed === 1 ? '' : 's'} already failing. Fix them first: against a red suite every mutation looks caught.`
+    `${baseline.failed} test${baseline.failed === 1 ? '' : 's'} already failing. ` +
+      'Fix them first: against a red suite every mutation looks caught.'
   );
   process.exit(2);
 }
@@ -397,18 +480,23 @@ for (const [file, from, to, meaning] of MUTATIONS) {
 
   fs.writeFileSync(target, original.replace(from, to), 'utf8');
 
-  let failed = 0;
-  try {
-    const out = execSync('npm test', { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    failed = Number(/^\S* fail (\d+)$/m.exec(out)?.[1] ?? 0);
-  } catch (e) {
-    failed = Number(/^\S* fail (\d+)$/m.exec(String(e.stdout ?? ''))?.[1] ?? 1);
-  }
-
+  const outcome = runTests();
   restore();
 
-  console.log(`  ${failed ? 'caught  ' : 'SURVIVED'} ${String(failed).padStart(2)} red   ${meaning}`);
-  if (!failed) {
+  // A mutation that stops the code compiling proves nothing: the suite never
+  // ran, and counting it as caught is how a harness comes out perfect while
+  // testing nothing. One of these entries really did inject a stray escape
+  // into the source and score itself a pass.
+  if (outcome.broken) {
+    console.log(`  BROKEN     ${meaning}  <- the mutation does not compile`);
+    survivors++;
+    continue;
+  }
+
+  console.log(
+    `  ${outcome.failed ? 'caught  ' : 'SURVIVED'} ${String(outcome.failed).padStart(2)} red   ${meaning}`
+  );
+  if (!outcome.failed) {
     survivors++;
   }
 }

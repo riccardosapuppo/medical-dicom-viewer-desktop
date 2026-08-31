@@ -69,3 +69,16 @@ export function readableSize(bytes: number): string {
   }
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(1)} MB`;
 }
+
+/**
+ * The key a patient's row is listed under.
+ *
+ * Not the identifier on its own. Anonymised exports have no PatientID, so two
+ * different people both key on the same empty string — and two rows under one
+ * key render correctly the first time and go wrong on the next update, when
+ * React reconciles them as though they were the same row. A patient turns into
+ * another patient and nothing anywhere says why.
+ */
+export function patientKey(patient: { patientId: string; name: string }): string {
+  return `${patient.patientId}|${patient.name}`;
+}

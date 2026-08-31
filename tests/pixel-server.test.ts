@@ -286,3 +286,71 @@ test('a file that stops before its pixels is refused rather than half served', a
 
   assert.equal(response.status, 409);
 });
+
+test('a file that promises four frames and carries one serves one', async () => {
+  // An interrupted copy. Answering 200 with a Content-Length the body cannot
+  // fill leaves the caller waiting on bytes that will never arrive, and the
+  // frame count in the header is not evidence about what is on the disk.
+  const bytes = writeDicomFile(
+    { sopClassUid: CT_IMAGE_STORAGE, sopInstanceUid: UID },
+    [
+      { group: 0x0008, element: 0x0018, vr: 'UI', value: UID },
+      { group: 0x0010, element: 0x0020, vr: 'LO', value: 'DEMO-0001' },
+      { group: 0x0020, element: 0x000d, vr: 'UI', value: '1.2.826.0.1.3680043.10.1337.7' },
+      { group: 0x0020, element: 0x000e, vr: 'UI', value: '1.2.826.0.1.3680043.10.1337.7.1' },
+      { group: 0x0028, element: 0x0008, vr: 'IS', value: 4 },
+      { group: 0x0028, element: 0x0010, vr: 'US', value: ROWS },
+      { group: 0x0028, element: 0x0011, vr: 'US', value: COLUMNS },
+      { group: 0x0028, element: 0x0100, vr: 'US', value: 16 },
+      { group: 0x7fe0, element: 0x0010, vr: 'OW', value: pattern(1) },
+    ]
+  );
+
+  const server = await serverFor([put('short-count.dcm', bytes)]);
+
+  const first = await ask(server, `dicom://instance/${UID}/frames/1`);
+  assert.equal(first.status, 200);
+  assert.equal((await first.arrayBuffer()).byteLength, FRAME_BYTES);
+
+  const missing = await ask(server, `dicom://instance/${UID}/frames/4`);
+  assert.equal(missing.status, 416);
+  assert.match(await missing.text(), /the file carries 1/);
+});
+
+test('an instance UID the page mangled is answered, not thrown at', async () => {
+  // decodeURIComponent throws on a stray percent sign, and an exception here
+  // reaches the protocol handler as a rejected promise instead of the answer
+  // the rest of this code is careful to give.
+  const server = await serverFor([put('mangled.dcm', slice(UID, 1))]);
+
+  const response = await ask(server, 'dicom://instance/%zz/frames/1');
+
+  assert.equal(response.status, 400);
+});
+
+test('a frame of no size is refused rather than served endlessly', async () => {
+  // A file declaring zero rows, or zero samples per pixel. Every frame would
+  // otherwise start where the last one did.
+  const bytes = writeDicomFile(
+    { sopClassUid: CT_IMAGE_STORAGE, sopInstanceUid: UID },
+    [
+      { group: 0x0008, element: 0x0018, vr: 'UI', value: UID },
+      { group: 0x0010, element: 0x0020, vr: 'LO', value: 'DEMO-0001' },
+      { group: 0x0020, element: 0x000d, vr: 'UI', value: '1.2.826.0.1.3680043.10.1337.8' },
+      { group: 0x0020, element: 0x000e, vr: 'UI', value: '1.2.826.0.1.3680043.10.1337.8.1' },
+      // Zero samples per pixel rather than zero rows: a frame size of zero that
+      // is nonetheless a number. Zero rows makes it undefined, which a weaker
+      // guard also catches, so it would not have told the two apart.
+      { group: 0x0028, element: 0x0002, vr: 'US', value: 0 },
+      { group: 0x0028, element: 0x0010, vr: 'US', value: ROWS },
+      { group: 0x0028, element: 0x0011, vr: 'US', value: COLUMNS },
+      { group: 0x0028, element: 0x0100, vr: 'US', value: 16 },
+      { group: 0x7fe0, element: 0x0010, vr: 'OW', value: new Uint8Array(64) },
+    ]
+  );
+
+  const server = await serverFor([put('no-size.dcm', bytes)]);
+  const response = await ask(server, `dicom://instance/${UID}/frames/1`);
+
+  assert.equal(response.status, 409);
+});

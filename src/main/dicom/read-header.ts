@@ -22,7 +22,18 @@ import dicomParser from 'dicom-parser';
 const PIXEL_DATA = 'x7fe00010';
 
 /** Big enough for almost every header, small enough to be free. */
-const FIRST_READ = 16 * 1024;
+export const FIRST_READ = 16 * 1024;
+
+/**
+ * Where growing stops.
+ *
+ * A file with no pixel data at all is legal — a structured report, a
+ * presentation state — and for those the loop below has no way to know it has
+ * seen the whole header except by reading the whole file. Those files are
+ * small. This is the guard against the one that is not, and against a file
+ * crafted to make the reader allocate.
+ */
+const MAX_HEADER = 16 * 1024 * 1024;
 
 /** DICOM Part 10 puts 128 bytes of nothing, then these four characters. */
 const PREAMBLE_LENGTH = 128;
@@ -305,6 +316,23 @@ export async function readHeader(filePath: string): Promise<InstanceHeader> {
 
       try {
         const dataSet = dicomParser.parseDicom(buffer, { untilTag: PIXEL_DATA });
+
+        // A parse that did not throw is not the same as a parse that finished.
+        //
+        // The parser walks elements until the buffer runs out, and when the
+        // buffer happens to run out exactly on an element boundary it stops
+        // cleanly and hands back everything it read. Nothing raises. The header
+        // is simply short a few tags, and the ones most likely to be missing
+        // are the last ones — which is where the pixel data is. The image then
+        // lists correctly and can never be opened, and nothing anywhere says
+        // why.
+        //
+        // Reaching the pixel data is the only proof there was nothing after it.
+        if (dataSet.elements[PIXEL_DATA] === undefined && length < size && length < MAX_HEADER) {
+          length = Math.min(length * 2, size);
+          continue;
+        }
+
         return extract(dataSet, filePath, size);
       } catch (error) {
         if (length >= size) {

@@ -15,6 +15,7 @@ import type { UnreadableFile } from '../main/dicom/read-header';
 export interface LibraryReading {
   folder: string;
   index: Index;
+  found: number;
   read: number;
   skipped: number;
   unreadable: UnreadableFile[];
@@ -45,16 +46,19 @@ export function useLibrary(): Library {
   useEffect(
     () =>
       window.workstation.onLibrary(message => {
+        // The folder is checked first, for every kind of message. Progress used
+        // to skip this test, so the tail of an abandoned read drove the bar of
+        // the folder that replaced it.
+        if (message.folder !== wanted.current) {
+          return;
+        }
+
         if (message.type === 'progress') {
           setState(current =>
             current.status === 'reading'
               ? { ...current, done: message.done, total: message.total }
               : current
           );
-          return;
-        }
-
-        if (message.folder !== wanted.current) {
           return;
         }
 
@@ -68,6 +72,7 @@ export function useLibrary(): Library {
           reading: {
             folder: message.folder,
             index: message.index,
+            found: message.found,
             read: message.read,
             skipped: message.skipped,
             unreadable: message.unreadable,

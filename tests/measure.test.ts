@@ -96,11 +96,13 @@ test('a flat region does not report a spread of not-a-number', () => {
   //
   // These are the values that actually do it: a rescale slope of a tenth, which
   // every scanner that stores tenths of a unit uses.
-  for (const [slope, intercept] of [
-    [0.1, 0],
-    [0.1, -1024],
-    [1 / 3, 0],
-  ]) {
+  const awkwardScales: Array<{ slope: number; intercept: number }> = [
+    { slope: 0.1, intercept: 0 },
+    { slope: 0.1, intercept: -1024 },
+    { slope: 1 / 3, intercept: 0 },
+  ];
+
+  for (const { slope, intercept } of awkwardScales) {
     const awkward = frame(() => 1, { rescaleSlope: slope, rescaleIntercept: intercept });
     const stats = statisticsOf(region({ x: 12, y: 12 }, { x: 32, y: 32 }), awkward);
 

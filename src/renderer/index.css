@@ -563,10 +563,23 @@ body {
   border-color: var(--live-dim);
 }
 
-.chip:focus-visible,
-.series__open:focus-visible {
+.chip:focus-visible {
   outline: 1px solid var(--live);
   outline-offset: 1px;
+}
+
+/* The button that opens a series is display: contents, so it has no box of its
+   own for an outline to be drawn on — the focus ring was simply invisible, and
+   somebody tabbing through a worklist had no idea where they were. The row
+   around it does have a box, so the ring goes there. */
+.series:has(.series__open:focus-visible) {
+  outline: 1px solid var(--live);
+  outline-offset: -1px;
+  color: var(--ink);
+}
+
+.series:has(.series__open:focus-visible) .series__screens {
+  opacity: 1;
 }
 
 /* The image sits on black, not on the interface grey: any surround lighter

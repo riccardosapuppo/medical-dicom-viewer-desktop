@@ -149,7 +149,17 @@ export class PixelServer {
       return text(400, `Expected ${SCHEME}://instance/<sop-instance-uid>/frames/<n>.`);
     }
 
-    const found = this.#images.get(decodeURIComponent(uid));
+    // The page controls this text, and decodeURIComponent throws on a stray
+    // percent sign. An exception here reaches protocol.handle as a rejected
+    // promise instead of the answer the code below is careful to give.
+    let name: string;
+    try {
+      name = decodeURIComponent(uid);
+    } catch {
+      return text(400, 'That is not a readable instance UID.');
+    }
+
+    const found = this.#images.get(name);
     if (!found) {
       // Not "forbidden": from the page's side an image outside the open folder
       // and an image that does not exist are the same thing, and saying which
@@ -168,13 +178,29 @@ export class PixelServer {
     if (!pixels.complete || pixels.dataOffset === undefined) {
       return text(409, 'The file stops before the pixel data it declares.');
     }
-    if (frameBytes === undefined) {
+    // Zero as well as absent: a file declaring SamplesPerPixel 0, or zero rows,
+    // gets past the nullish default and would make every frame start where the
+    // last one did.
+    if (!frameBytes) {
       return text(409, 'The header does not say how big a frame is.');
     }
 
+    // Bounded by the pixel data that is actually there, not only by the frame
+    // count the header claims. A file that says four frames and carries one is
+    // an interrupted copy, and answering 200 with a Content-Length the body
+    // cannot fill leaves the caller waiting on bytes that never come.
+    const available = Math.floor((pixels.dataLength ?? 0) / frameBytes);
+    const usable = Math.min(pixels.numberOfFrames, available);
+
     const frame = Number(rawFrame);
-    if (!Number.isInteger(frame) || frame < 1 || frame > pixels.numberOfFrames) {
-      return text(416, `Frame ${rawFrame} is outside 1..${pixels.numberOfFrames}.`);
+    if (!Number.isInteger(frame) || frame < 1 || frame > usable) {
+      return text(
+        416,
+        `Frame ${rawFrame} is outside 1..${usable}` +
+          (usable < pixels.numberOfFrames
+            ? ` (the header claims ${pixels.numberOfFrames}, the file carries ${usable}).`
+            : '.')
+      );
     }
 
     const frameStart = pixels.dataOffset + (frame - 1) * frameBytes;

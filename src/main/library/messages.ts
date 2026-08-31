@@ -13,11 +13,15 @@ export type ToIndexer = { type: 'index'; folder: string } | { type: 'cancel' };
 
 /** Sent back from it. */
 export type FromIndexer =
-  | { type: 'progress'; done: number; total: number }
+  // The folder travels with the progress. Without it, the tail of a read that
+  // was abandoned drives the progress bar of the folder that replaced it, and
+  // a twelve-file folder appears to be twelve thousand files in.
+  | { type: 'progress'; folder: string; done: number; total: number }
   | {
       type: 'done';
       folder: string;
       index: Index;
+      found: number;
       read: number;
       skipped: number;
       unreadable: UnreadableFile[];

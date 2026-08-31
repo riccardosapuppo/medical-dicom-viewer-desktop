@@ -56,6 +56,10 @@ put('study/series-2/image-0001.dcm', slice(2, 1, 0));
 put('README.TXT', Buffer.from("PATIENT IMAGING DISC\r\n\r\nThis disc contains diagnostic images in DICOM format together with a viewer\r\nfor Microsoft Windows. Insert the disc and run VIEWER.EXE, or open the\r\nDICOMDIR file with any DICOM application. Please give this disc to your\r\ndoctor at your next appointment.\r\n"));
 put('AUTORUN.INF', Buffer.from('[autorun]\r\nopen=viewer.exe\r\n'));
 put('DICOMDIR', slice(9, 1, 0));
+// Lowercase as well: a disc written on a system that does not care about case
+// carries one of these, and Windows does not care either. A comparison that
+// does care indexes it as a study made of pointers.
+put('dicomdir', slice(8, 1, 0));
 put(
   'study/series-1/image-0003.dcm',
   Buffer.concat([Buffer.alloc(128), Buffer.from('DICM', 'latin1'), Buffer.alloc(400, 0xab)])
@@ -92,9 +96,17 @@ test('the directory record is not indexed as a study', async () => {
   // study made of pointers, which is a study that cannot be opened.
   const result = await indexFolder(scratch);
 
+  const series = result.index.patients[0]?.studies[0]?.series ?? [];
+
   assert.equal(
-    result.index.patients[0]?.studies[0]?.series.some(s => s.seriesNumber === 9),
-    false
+    series.some(s => s.seriesNumber === 9),
+    false,
+    'DICOMDIR was indexed'
+  );
+  assert.equal(
+    series.some(s => s.seriesNumber === 8),
+    false,
+    'dicomdir was indexed'
   );
 });
 
@@ -104,7 +116,7 @@ test('progress is reported all the way to the end', async () => {
   const seen: number[] = [];
   const result = await indexFolder(scratch, { onProgress: done => seen.push(done) });
 
-  assert.equal(seen.length, 6, 'one call per file, DICOMDIR aside');
+  assert.equal(seen.length, 6, 'one call per file, the directory records aside');
   assert.equal(Math.max(...seen), 6);
   assert.ok(result.elapsedMs >= 0);
 });
@@ -128,4 +140,72 @@ test('a file dropped instead of a folder says so', async () => {
     () => indexFolder(file),
     (error: Error) => /is a file, not a folder/.test(error.message)
   );
+});
+
+test('the same folder gives the same index every time', () => {
+  // Eight readers finish in the order the disk answers in, and the first header
+  // of a series decides its description, its modality and the spelling of the
+  // patient's name. Appending as they finish made two runs over one unchanged
+  // folder produce two different indexes, which is the kind of difference that
+  // gets blamed on the data.
+  const many = path.join(scratch, 'many');
+  fs.mkdirSync(many, { recursive: true });
+
+  for (let i = 1; i <= 40; i++) {
+    const sop = `${STUDY}.5.${i}`;
+    const elements: Element[] = [
+      { group: 0x0008, element: 0x0016, vr: 'UI', value: CT_IMAGE_STORAGE },
+      { group: 0x0008, element: 0x0018, vr: 'UI', value: sop },
+      { group: 0x0008, element: 0x0060, vr: 'CS', value: 'CT' },
+      // Every file but the first says something else, so which one arrives
+      // first is visible in the answer.
+      { group: 0x0008, element: 0x103e, vr: 'LO', value: i === 1 ? 'AXIAL 1.0MM' : 'RECON B' },
+      { group: 0x0010, element: 0x0010, vr: 'PN', value: i === 1 ? 'Bianchi^Anna' : 'BIANCHI^ANNA' },
+      { group: 0x0010, element: 0x0020, vr: 'LO', value: 'DEMO-0001' },
+      { group: 0x0020, element: 0x000d, vr: 'UI', value: STUDY },
+      { group: 0x0020, element: 0x000e, vr: 'UI', value: `${STUDY}.5` },
+      { group: 0x0020, element: 0x0011, vr: 'IS', value: 5 },
+      { group: 0x0020, element: 0x0013, vr: 'IS', value: i },
+      { group: 0x0028, element: 0x0010, vr: 'US', value: 64 },
+      { group: 0x0028, element: 0x0011, vr: 'US', value: 64 },
+      { group: 0x0028, element: 0x0100, vr: 'US', value: 16 },
+      { group: 0x7fe0, element: 0x0010, vr: 'OW', value: new Uint8Array(64 * 64 * 2) },
+    ];
+    fs.writeFileSync(
+      path.join(many, `img-${String(i).padStart(2, '0')}.dcm`),
+      writeDicomFile({ sopClassUid: CT_IMAGE_STORAGE, sopInstanceUid: sop }, elements)
+    );
+  }
+
+  return (async () => {
+    const answers = [];
+    for (let run = 0; run < 6; run++) {
+      const result = await indexFolder(many);
+      const patient = result.index.patients[0];
+      answers.push(`${patient?.name}|${patient?.studies[0]?.series[0]?.description}`);
+    }
+
+    assert.equal(
+      new Set(answers).size,
+      1,
+      `six runs over one folder gave ${new Set(answers).size} different answers: ${[...new Set(answers)].join(' / ')}`
+    );
+    assert.equal(answers[0], 'Bianchi Anna|AXIAL 1.0MM', 'the first file by name should decide');
+  })();
+});
+
+test('a walk can be stopped before it has read anything', async () => {
+  // Somebody who drops a drive root and presses Stop is waiting on a walk that
+  // has not reached its first file. A cancel that only takes effect once the
+  // walk finishes is not a cancel.
+  const controller = new AbortController();
+  controller.abort();
+
+  const result = await indexFolder(scratch, { signal: controller.signal });
+
+  assert.equal(result.read, 0);
+  assert.equal(result.index.patients.length, 0);
+  // The walk itself has to stop, not just the reading afterwards: a folder can
+  // hold a million entries and finding them all is the slow part.
+  assert.equal(result.found, 0, 'the directory was enumerated anyway');
 });

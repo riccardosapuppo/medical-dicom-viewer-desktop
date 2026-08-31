@@ -170,7 +170,14 @@ test('the frame being looked at survives an eviction sweep', async () => {
     await source.get(i);
   }
 
+  // One more than the cache holds, so something has to go. Without this the
+  // cache was never full and the test passed with the recency bookkeeping
+  // deleted - which is the whole of what it claims to check.
+  source.ready(0);
+  await source.get(4);
+
   assert.ok(source.ready(0) !== undefined, 'the frame in use was evicted while in use');
+  assert.equal(source.ready(1), undefined, 'nothing was evicted, so nothing was proved');
 });
 
 test('prefetching asks ahead, in the direction of travel', async () => {

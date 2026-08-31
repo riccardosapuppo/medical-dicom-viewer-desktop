@@ -10,7 +10,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { age, readableDate, readableSize, readableTime, tailOfPath } from '../src/renderer/format';
+import {
+  age,
+  patientKey,
+  readableDate,
+  readableSize,
+  readableTime,
+  tailOfPath,
+} from '../src/renderer/format';
 
 test('a DICOM date reads as a date', () => {
   assert.equal(readableDate('20240412'), '12 Apr 2024');
@@ -71,4 +78,25 @@ test('sizes read the way a person says them', () => {
   assert.equal(readableSize(2.5 * 1024 * 1024 * 1024), '2.5 GB');
   // Never zero: a file that exists is at least something.
   assert.equal(readableSize(10), '1 KB');
+});
+
+test('two patients with no identifier are listed under different keys', () => {
+  // Anonymised exports have no PatientID. Two rows under one key render
+  // correctly the first time and go wrong on the next update, when React
+  // reconciles them as though they were the same row.
+  //
+  // Tested here rather than by rendering, because rendering says nothing about
+  // it: server rendering does not warn on a duplicate key and the markup is
+  // identical either way. The only way to check is to call the function.
+  const one = patientKey({ patientId: '(unidentified)', name: 'Case One' });
+  const two = patientKey({ patientId: '(unidentified)', name: 'Case Two' });
+
+  assert.notEqual(one, two);
+});
+
+test('the same patient always gets the same key', () => {
+  const patient = { patientId: 'DEMO-0001', name: 'Bianchi Anna' };
+
+  assert.equal(patientKey(patient), patientKey({ ...patient }));
+  assert.notEqual(patientKey(patient), patientKey({ ...patient, patientId: 'DEMO-0002' }));
 });

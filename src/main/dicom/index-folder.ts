@@ -23,10 +23,12 @@ const CONCURRENCY = 8;
  * describes the others, and indexing it would add a phantom study made of
  * pointers.
  */
-const DIRECTORY_RECORD = 'DICOMDIR';
+const DIRECTORY_RECORD = 'dicomdir';
 
 export interface IndexResult {
   index: Index;
+  /** Files the walk found, before any of them were opened. */
+  found: number;
   /** Files that parsed. */
   read: number;
   /** Files that were not DICOM at all — ordinary, and not an error. */
@@ -44,16 +46,23 @@ export interface IndexOptions {
 }
 
 /** Every file under a directory, depth first, symlinks not followed. */
-async function listFiles(root: string): Promise<string[]> {
+async function listFiles(root: string, signal?: AbortSignal): Promise<string[]> {
   const found: string[] = [];
 
   async function walk(directory: string): Promise<void> {
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
+      // Checked inside the loop, not only at the top: somebody who drops a
+      // drive root and then presses Stop is waiting on a walk that has not
+      // reached its first file yet, and a cancel that only takes effect once
+      // the walk finishes is not a cancel.
+      if (signal?.aborted) {
+        return;
+      }
       const full = path.join(directory, entry.name);
       if (entry.isDirectory()) {
         await walk(full);
-      } else if (entry.isFile() && entry.name !== DIRECTORY_RECORD) {
+      } else if (entry.isFile() && entry.name.toLowerCase() !== DIRECTORY_RECORD) {
         found.push(full);
       }
     }
@@ -94,12 +103,17 @@ export async function indexFolder(root: string, options: IndexOptions = {}): Pro
 
   let files: string[];
   try {
-    files = await listFiles(root);
+    files = await listFiles(root, options.signal);
   } catch (error) {
     throw new Error(explainFolderError(root, error));
   }
 
-  const headers: InstanceHeader[] = [];
+  // Written by position rather than appended: with eight workers in flight the
+  // order they finish in is the order the disk happens to answer in, and the
+  // first header of a series decides its description, its modality and the
+  // spelling of the patient's name. Two runs over one folder were producing
+  // two different indexes.
+  const inOrder: Array<InstanceHeader | undefined> = new Array(files.length);
   const unreadable: UnreadableFile[] = [];
   let skipped = 0;
   let done = 0;
@@ -114,7 +128,7 @@ export async function indexFolder(root: string, options: IndexOptions = {}): Pro
       const filePath = files[i] as string;
 
       try {
-        headers.push(await readHeader(filePath));
+        inOrder[i] = await readHeader(filePath);
       } catch (error) {
         if (error instanceof NotDicomError) {
           skipped++;
@@ -132,8 +146,11 @@ export async function indexFolder(root: string, options: IndexOptions = {}): Pro
 
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, files.length) }, worker));
 
+  const headers = inOrder.filter((header): header is InstanceHeader => header !== undefined);
+
   return {
     index: buildIndex(headers),
+    found: files.length,
     read: headers.length,
     skipped,
     unreadable,

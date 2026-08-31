@@ -228,6 +228,16 @@ export function buildIndex(headers: InstanceHeader[]): Index {
   let duplicates = 0;
 
   for (const header of headers) {
+    // An image with no UID at all is not a copy of the last image with no UID.
+    // Anonymisers blank the tag rather than replacing it, and a header cut
+    // short loses it the same way; keying on the empty string collapsed every
+    // one of them into a single instance and reported the rest as duplicates,
+    // which is a false statement about several different images.
+    if (!header.sopInstanceUid) {
+      unique.push(header);
+      continue;
+    }
+
     if (seen.has(header.sopInstanceUid)) {
       duplicates++;
       continue;

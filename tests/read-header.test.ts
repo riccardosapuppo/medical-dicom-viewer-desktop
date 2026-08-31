@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 
-import { NotDicomError, readHeader } from '../src/main/dicom/read-header';
+import { FIRST_READ, NotDicomError, readHeader } from '../src/main/dicom/read-header';
 import {
   CT_IMAGE_STORAGE,
   EXPLICIT_VR_LITTLE_ENDIAN,
@@ -81,10 +81,23 @@ test('reads what an index needs off a single slice', async () => {
   assert.equal(header.pixels.transferSyntaxUid, EXPLICIT_VR_LITTLE_ENDIAN);
 });
 
-test('a name written with carets comes back readable', () => {
-  // DICOM separates the parts of a name with carets. Showing them to a
+test('a name written with carets comes back readable', async () => {
+  // DICOM separates the parts of a name with carets, and showing those to a
   // radiologist is showing them the wire format.
-  assert.equal(SLICE.find(e => e.element === 0x0010 && e.group === 0x0010)?.value, 'Rossi^Mario');
+  //
+  // The first version of this asserted that the fixture contained a caret,
+  // which is a test of the fixture. It never called the reader, so it would
+  // have passed with the conversion deleted.
+  const header = await readHeader(
+    put(
+      'caret-name.dcm',
+      sliceFile([
+        { group: 0x0010, element: 0x0010, vr: 'PN', value: 'De Luca^Maria Chiara^^Dott.ssa^' },
+      ])
+    )
+  );
+
+  assert.equal(header.patientName, 'De Luca Maria Chiara Dott.ssa');
 });
 
 test('an absent frame count means one frame, not none', async () => {
@@ -162,9 +175,6 @@ test('a file that claims DICM and then makes no sense is a real error', async ()
 test('a position with a missing component is dropped, not half read', async () => {
   // [12, NaN, 40] would sort a stack into an order that looks plausible and is
   // not. Better no geometry than geometry that is wrong.
-  const bad = sliceFile().length;
-  assert.ok(bad > 0);
-
   const withBadPosition = writeDicomFile(
     { sopClassUid: CT_IMAGE_STORAGE, sopInstanceUid: SOP_INSTANCE },
     [
@@ -283,4 +293,49 @@ test('an image with no pixel data at all is not complete', async () => {
 
   assert.equal(header.pixels.dataOffset, undefined);
   assert.equal(header.pixels.complete, false);
+});
+
+test('a header cut exactly on an element boundary is not read short', async () => {
+  // The nastiest of the header-length cases, and the only one that is silent.
+  //
+  // The parser walks elements until the buffer runs out. When it runs out in
+  // the middle of an element it raises, and the reader reads more. When it runs
+  // out exactly between two elements it stops cleanly and hands back everything
+  // it read, raising nothing — and what is missing is the tags at the end,
+  // which is where the pixel data is. The image lists correctly and can never
+  // be opened.
+  //
+  // The filler below is sized so the read-ahead ends precisely on a boundary,
+  // which is why it is computed rather than guessed at.
+  const before: Element[] = [
+    { group: 0x0008, element: 0x0016, vr: 'UI', value: CT_IMAGE_STORAGE },
+    { group: 0x0008, element: 0x0018, vr: 'UI', value: SOP_INSTANCE },
+    { group: 0x0008, element: 0x0060, vr: 'CS', value: 'CT' },
+  ];
+
+  const prefix = writeDicomFile(
+    { sopClassUid: CT_IMAGE_STORAGE, sopInstanceUid: SOP_INSTANCE },
+    before
+  ).length;
+
+  // Twelve bytes of element header, then a body that ends on the boundary.
+  const filler = FIRST_READ - prefix - 12;
+  assert.ok(filler > 0 && filler % 2 === 0, `the filler came out at ${filler}`);
+
+  const bytes = writeDicomFile({ sopClassUid: CT_IMAGE_STORAGE, sopInstanceUid: SOP_INSTANCE }, [
+    ...before,
+    { group: 0x0009, element: 0x0010, vr: 'OB', value: new Uint8Array(filler) },
+    { group: 0x0010, element: 0x0020, vr: 'LO', value: 'BEYOND-THE-CUT' },
+    { group: 0x0028, element: 0x0010, vr: 'US', value: 512 },
+    { group: 0x0028, element: 0x0011, vr: 'US', value: 512 },
+    { group: 0x0028, element: 0x0100, vr: 'US', value: 16 },
+    pixelData(512 * 512 * 2),
+  ]);
+
+  const header = await readHeader(put('on-the-boundary.dcm', bytes));
+
+  assert.equal(header.patientId, 'BEYOND-THE-CUT');
+  assert.equal(header.pixels.rows, 512);
+  assert.notEqual(header.pixels.dataOffset, undefined, 'the pixel data was never reached');
+  assert.equal(header.pixels.complete, true);
 });

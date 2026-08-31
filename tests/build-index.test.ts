@@ -199,3 +199,26 @@ test('a file with no patient id at all still lands somewhere', () => {
   assert.equal(patients.length, 1);
   assert.equal(patients[0]?.patientId, '(unidentified)');
 });
+
+test('images with no SOP Instance UID are not taken for copies of each other', () => {
+  // Anonymisers blank the tag rather than removing it, and a header cut short
+  // loses it the same way. Keying deduplication on the empty string collapsed
+  // five different images into one and reported the other four as duplicates —
+  // a false statement about four images that were simply gone.
+  const anonymous = Array.from({ length: 5 }, (_, i) =>
+    header({ sopInstanceUid: '', instanceNumber: i + 1 })
+  );
+
+  const { patients, duplicates } = buildIndex(anonymous);
+
+  assert.equal(duplicates, 0);
+  assert.equal(patients[0]?.studies[0]?.series[0]?.instances.length, 5);
+  assert.equal(patients[0]?.studies[0]?.instanceCount, 5);
+});
+
+test('a real duplicate is still only counted once', () => {
+  // The guard above must not turn deduplication off for everything else.
+  const twice = [header({ sopInstanceUid: 'S.1' }), header({ sopInstanceUid: 'S.1' })];
+
+  assert.equal(buildIndex(twice).duplicates, 1);
+});

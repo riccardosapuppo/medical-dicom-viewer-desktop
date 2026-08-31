@@ -345,7 +345,11 @@ export function Viewport({
     if (drag.button === TOOLS.window) {
       setVoi(dragWindow(drag.from, dx, dy));
     } else if (drag.button === TOOLS.pan) {
-      setPan({ x: drag.pan.x + dx, y: drag.pan.y + dy });
+      // The pan is in canvas pixels and the pointer moves in CSS pixels. On a
+      // screen at 150 per cent the image was following two thirds of the drag,
+      // which reads as a heavy, laggy viewer rather than as a bug.
+      const ratio = window.devicePixelRatio || 1;
+      setPan({ x: drag.pan.x + dx * ratio, y: drag.pan.y + dy * ratio });
     } else if (drag.button === TOOLS.zoom) {
       // Down zooms in, which is the way a magnifier feels when you pull it
       // towards you, and the way every workstation does it.

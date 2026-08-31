@@ -25,6 +25,16 @@ export function App(): React.ReactElement {
   const [restored, setRestored] = useState<string | undefined>(undefined);
   const library = useLibrary();
 
+  // A series belongs to the folder it came from. When the folder changes - by
+  // the dialog, by a drop, by a second launch - the image and the patient name
+  // on screen belong to a study that is no longer open, and leaving them there
+  // shows one patient's identity over another's images.
+  const folderOnScreen =
+    library.state.status === 'ready' ? library.state.reading.folder : undefined;
+  useEffect(() => {
+    setOpened(undefined);
+  }, [folderOnScreen]);
+
   useEffect(() => {
     void window.workstation.readDesk().then(setDesk);
 
@@ -44,9 +54,6 @@ export function App(): React.ReactElement {
     setDragging(false);
     const file = event.dataTransfer.files[0];
     if (file) {
-      // A folder dropped while a series is open replaces both: the image on
-      // screen belongs to a folder that is no longer the one being read.
-      setOpened(undefined);
       library.read(window.workstation.pathOfDropped(file));
     }
   };
@@ -213,12 +220,15 @@ function Tally({ library }: { library: ReturnType<typeof useLibrary> }): React.R
   if (library.state.status !== 'ready') {
     return null;
   }
-  const { read, skipped, elapsedMs, index } = library.state.reading;
+  const { found, read, skipped, elapsedMs, index } = library.state.reading;
 
   return (
     <span className="status__muted">
-      {read} images in {Math.round(elapsedMs)} ms
-      {skipped > 0 ? `, ${skipped} skipped` : ''}
+      {/* Out of how many were looked at, not just how many turned out to be
+          images: somebody who dropped the wrong folder wants to see that it
+          held four hundred files and none of them were studies. */}
+      {read} of {found} files read in {Math.round(elapsedMs)} ms
+      {skipped > 0 ? `, ${skipped} not DICOM` : ''}
       {index.duplicates > 0 ? `, ${index.duplicates} duplicates` : ''}
     </span>
   );

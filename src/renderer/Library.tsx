@@ -9,8 +9,12 @@
 import React, { useState } from 'react';
 
 import type { Patient, Series, Study } from '../main/dicom/build-index';
+import type { UnreadableFile } from '../main/dicom/read-header';
 
-import { age, readableDate, readableTime } from './format';
+import { age, patientKey, readableDate, readableTime } from './format';
+
+/** Both path separators, so a file name is the last segment on either system. */
+const SEPARATORS = new RegExp('[' + String.fromCharCode(92, 92) + '/]');
 import type { Opened } from './viewer/Viewport';
 import type { LibraryReading } from './useLibrary';
 
@@ -119,6 +123,35 @@ function StudyBlock({
   );
 }
 
+/**
+ * The files that claimed to be DICOM and would not parse.
+ *
+ * Not the stray files — those are counted and forgotten. These mean a slice is
+ * missing from a study, so they are named.
+ */
+function Unreadable({
+  files,
+  lead,
+}: {
+  files: UnreadableFile[];
+  lead?: string;
+}): React.ReactElement {
+  return (
+    <section className="unreadable">
+      <h2>{lead ?? `${files.length} files would not read`}</h2>
+      <ul>
+        {files.slice(0, 12).map(bad => (
+          <li key={bad.filePath}>
+            <span className="unreadable__file">{bad.filePath.split(SEPARATORS).pop()}</span>
+            <span className="unreadable__reason">{bad.reason}</span>
+          </li>
+        ))}
+      </ul>
+      {files.length > 12 ? <p className="muted">and {files.length - 12} more</p> : null}
+    </section>
+  );
+}
+
 export function Library({
   reading,
   onOpen,
@@ -131,6 +164,17 @@ export function Library({
   const { patients } = reading.index;
 
   if (patients.length === 0) {
+    // "No DICOM files" is the wrong sentence when there were plenty and none of
+    // them would parse: that is a folder of broken images, which is somebody's
+    // problem, and the list of what failed is the useful part.
+    if (reading.unreadable.length > 0) {
+      return (
+        <section className="library">
+          <Unreadable files={reading.unreadable} lead="Nothing in this folder could be read" />
+        </section>
+      );
+    }
+
     return (
       <section className="library library--empty">
         <p>No DICOM files in this folder.</p>
@@ -144,7 +188,7 @@ export function Library({
   return (
     <section className="library">
       {patients.map(patient => (
-        <section className="patient" key={patient.patientId}>
+        <section className="patient" key={patientKey(patient)}>
           <header className="patient__head">
             <h2>{patient.name || 'unidentified'}</h2>
             <span className="patient__id">{patient.patientId}</span>
@@ -166,25 +210,7 @@ export function Library({
         </section>
       ))}
 
-      {reading.unreadable.length > 0 ? (
-        <section className="unreadable">
-          <h2>{reading.unreadable.length} files would not read</h2>
-          {/* Not the stray files - those are counted and forgotten. These
-              claimed to be DICOM and failed, which means a slice is missing
-              from a study above. */}
-          <ul>
-            {reading.unreadable.slice(0, 12).map(bad => (
-              <li key={bad.filePath}>
-                <span className="unreadable__file">{bad.filePath.split(/[\/]/).pop()}</span>
-                <span className="unreadable__reason">{bad.reason}</span>
-              </li>
-            ))}
-          </ul>
-          {reading.unreadable.length > 12 ? (
-            <p className="muted">and {reading.unreadable.length - 12} more</p>
-          ) : null}
-        </section>
-      ) : null}
+      {reading.unreadable.length > 0 ? <Unreadable files={reading.unreadable} /> : null}
     </section>
   );
 }

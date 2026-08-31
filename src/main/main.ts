@@ -74,6 +74,15 @@ function createWindow(): BrowserWindow {
   // empty frame, which on a dark interface is a white rectangle.
   window.once('ready-to-show', () => window.show());
 
+  // Forgotten on close, so that nothing later sends to a window that is gone.
+  // On macOS the application outlives its window, and every send after that
+  // would throw on a destroyed object.
+  window.on('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = undefined;
+    }
+  });
+
   // Nothing in this application opens a second window, and a page that tries is
   // either a mistake or a link someone clicked. Links go to the browser.
   window.webContents.setWindowOpenHandler(({ url }) => {

@@ -287,6 +287,41 @@ which is the property it was supposed to be testing.
 The suite it runs against is checked too: `npm run mutations` refuses to start
 if any test is already failing, because against a red suite every mutation
 looks caught and the report comes out perfect while proving nothing.
+## What an adversarial reading found
+
+Twelve readers were set on this code with instructions to break it, each one
+given a different thing to look for, and every claim they made was handed to a
+second reader whose job was to refute it. Fifty-four claims: thirty-two were
+wrong, twenty-two survived. Every one of the twenty-two is fixed, and each has
+a test and an entry in the mutation harness.
+
+The two worth naming, because both were silent:
+
+**A header could be read short without anything raising.** The parser walks
+elements until the buffer runs out. When it runs out in the middle of one it
+raises, and the reader reads more — which is what the growth loop was written
+for and what the tests covered. When it runs out exactly *between* two
+elements it stops cleanly and hands back what it has, and what is missing is
+the tags at the end, which is where the pixel data is. The image listed
+correctly and could never be opened. It now reads more until it has actually
+reached the pixel data, because arriving there is the only proof there was
+nothing after it.
+
+**Images with no identifier were counted as copies of each other.** A missing
+SOP Instance UID reads as an empty string, and deduplication keyed on it: five
+anonymised slices became one, and the other four were reported as duplicates —
+a false statement about four images that had simply gone. Anonymisers blank
+that tag rather than removing it, so this is not a corner case.
+
+The rest were of the same family: progress from a folder the user had already
+left driving the new folder’s bar, a frame past the end of the pixel data
+answered with a length the body could not fill, a lowercase `dicomdir` indexed
+as a phantom study, an index that came out differently on two runs over one
+unchanged folder because eight readers finished in whatever order the disk
+answered in, a pan that followed two thirds of the pointer on a scaled screen,
+a focus ring drawn on an element with no box to draw it on, and four tests that
+could not fail.
+
 ## No patient data
 
 There is none in this repository and there never will be. `npm run demo-data`
