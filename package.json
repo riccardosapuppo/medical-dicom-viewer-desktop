@@ -1,0 +1,26 @@
+{
+  "name": "dicom-workstation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A reading-room workstation: native windows placed on the panes of glass they belong to, arrangements that come back, and studies read from disk.",
+  "license": "MIT",
+  "main": "dist/displays-report.js",
+  "scripts": {
+    "build:main": "esbuild tools/displays-report.ts --bundle --platform=node --target=node20 --format=cjs --external:electron --outfile=dist/displays-report.js",
+    "displays": "npm run build:main && electron dist/displays-report.js",
+    "typecheck": "tsc --noEmit",
+    "build:test": "esbuild tests/display-topology.test.ts --bundle --platform=node --target=node20 --format=cjs --outdir=dist/tests",
+    "test": "npm run build:test && node --test \"dist/tests/*.test.js\"",
+    "mutations": "node tools/mutations.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "electron": "^33.3.1",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "esbuild@0.24.2": true
+  }
+}
