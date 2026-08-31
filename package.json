@@ -9,9 +9,10 @@
     "build:main": "esbuild tools/displays-report.ts --bundle --platform=node --target=node20 --format=cjs --external:electron --outfile=dist/displays-report.js",
     "displays": "npm run build:main && electron dist/displays-report.js",
     "typecheck": "tsc --noEmit",
-    "build:test": "esbuild tests/display-topology.test.ts --bundle --platform=node --target=node20 --format=cjs --outdir=dist/tests",
-    "test": "npm run build:test && node --test \"dist/tests/*.test.js\"",
+    "test": "node tools/run-tests.mjs",
     "mutations": "node tools/mutations.mjs",
+    "build:index": "esbuild tools/index-report.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index-report.js",
+    "index": "npm run build:index && node dist/index-report.js",
     "demo-data": "esbuild tools/make-demo-data.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/make-demo-data.js && node dist/make-demo-data.js"
   },
   "devDependencies": {
@@ -23,5 +24,8 @@
   "allowScripts": {
     "electron@33.4.11": true,
     "esbuild@0.24.2": true
+  },
+  "dependencies": {
+    "dicom-parser": "^1.8.21"
   }
 }
