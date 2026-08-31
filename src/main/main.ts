@@ -12,10 +12,11 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol, screen, shell } from 'electron';
 
 import { describe, readDesk, type Desk } from './display-topology';
 import { Indexer } from './library/indexer-host';
+import { PixelServer, SCHEME } from './library/pixel-server';
 
 /** Where the built renderer lives, relative to the compiled main process. */
 const RENDERER = path.join(__dirname, 'renderer', 'index.html');
@@ -85,6 +86,18 @@ function createWindow(): BrowserWindow {
   return window;
 }
 
+// Declared before the application is ready, which is the only moment it can be:
+// registered later the scheme still resolves, but fetch() refuses it and says
+// nothing about why. Standard so that URLs parse into host and path; secure so
+// a page served from file: may fetch it; stream so a frame arrives as it is
+// read rather than after it is all in memory.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  },
+]);
+
 // A second launch is a study being opened, not a second application.
 if (!app.requestSingleInstanceLock()) {
   app.exit(0);
@@ -131,7 +144,21 @@ if (!app.requestSingleInstanceLock()) {
     // Reading a folder happens in a process of its own; everything the window
     // hears about it comes through here.
     const indexer = new Indexer();
-    indexer.on(message => mainWindow?.webContents.send('library:message', message));
+    const pixels = new PixelServer();
+
+    indexer.on(message => {
+      // What the page may fetch is exactly what is in the folder it is looking
+      // at, and it changes at the same moment the list does.
+      if (message.type === 'done') {
+        pixels.remember(message.index);
+      } else if (message.type === 'failed') {
+        pixels.forget();
+      }
+      mainWindow?.webContents.send('library:message', message);
+    });
+
+    protocol.handle(SCHEME, request => pixels.handle(request));
+
     app.on('will-quit', () => indexer.stop());
 
     ipcMain.handle('library:read', (_event, folder: unknown) => {

@@ -73,12 +73,12 @@ test('reads what an index needs off a single slice', async () => {
   assert.equal(header.accessionNumber, 'ACC12345');
   assert.equal(header.seriesNumber, 2);
   assert.equal(header.instanceNumber, 7);
-  assert.equal(header.rows, 512);
-  assert.equal(header.columns, 512);
+  assert.equal(header.pixels.rows, 512);
+  assert.equal(header.pixels.columns, 512);
   assert.deepEqual(header.imagePositionPatient, [-250, -250, 42.5]);
   assert.deepEqual(header.imageOrientationPatient, [1, 0, 0, 0, 1, 0]);
-  assert.deepEqual(header.pixelSpacing, [0.703125, 0.703125]);
-  assert.equal(header.transferSyntaxUid, EXPLICIT_VR_LITTLE_ENDIAN);
+  assert.deepEqual(header.pixels.pixelSpacing, [0.703125, 0.703125]);
+  assert.equal(header.pixels.transferSyntaxUid, EXPLICIT_VR_LITTLE_ENDIAN);
 });
 
 test('a name written with carets comes back readable', () => {
@@ -90,7 +90,7 @@ test('a name written with carets comes back readable', () => {
 test('an absent frame count means one frame, not none', async () => {
   const header = await readHeader(put('frames.dcm', sliceFile()));
 
-  assert.equal(header.numberOfFrames, 1);
+  assert.equal(header.pixels.numberOfFrames, 1);
 });
 
 test('a header bigger than the read-ahead is read anyway', async () => {
@@ -124,7 +124,7 @@ test('the pixels are never read', async () => {
   const truncated = put('truncated.dcm', Buffer.concat([withoutPixels, pixelHeader]));
   const header = await readHeader(truncated);
 
-  assert.equal(header.rows, 512);
+  assert.equal(header.pixels.rows, 512);
   assert.ok(header.fileSize < 100 * 1024, 'the fixture should be nowhere near a real slice');
 });
 
@@ -195,11 +195,92 @@ test('a file stored with implicit VR reads the same as an explicit one', async (
 
   const header = await readHeader(put('implicit.dcm', implicit));
 
-  assert.equal(header.transferSyntaxUid, IMPLICIT_VR_LITTLE_ENDIAN);
+  assert.equal(header.pixels.transferSyntaxUid, IMPLICIT_VR_LITTLE_ENDIAN);
   assert.equal(header.patientName, 'Rossi Mario');
   assert.equal(header.patientId, 'PAT001');
   assert.equal(header.modality, 'CT');
   assert.equal(header.instanceNumber, 7);
-  assert.equal(header.rows, 512);
+  assert.equal(header.pixels.rows, 512);
   assert.deepEqual(header.imagePositionPatient, [-250, -250, 42.5]);
+});
+
+/** The tags that decide what a stored number means. */
+const MEANING: Element[] = [
+  { group: 0x0028, element: 0x0002, vr: 'US', value: 1 },
+  { group: 0x0028, element: 0x0004, vr: 'CS', value: 'MONOCHROME2' },
+  { group: 0x0028, element: 0x0101, vr: 'US', value: 16 },
+  { group: 0x0028, element: 0x0102, vr: 'US', value: 15 },
+  { group: 0x0028, element: 0x0103, vr: 'US', value: 1 },
+  // Two windows in one file: soft tissue first, then bone. Real scanners do this.
+  { group: 0x0028, element: 0x1050, vr: 'DS', value: [40, 300] },
+  { group: 0x0028, element: 0x1051, vr: 'DS', value: [400, 1500] },
+  { group: 0x0028, element: 0x1052, vr: 'DS', value: -1024 },
+  { group: 0x0028, element: 0x1053, vr: 'DS', value: 2 },
+];
+
+function pixelData(bytes: number): Element {
+  return { group: 0x7fe0, element: 0x0010, vr: 'OW', value: new Uint8Array(bytes) };
+}
+
+test('the layout that decides what a stored number means is read', async () => {
+  const header = await readHeader(
+    put('meaning.dcm', sliceFile([...MEANING, pixelData(512 * 512 * 2)]))
+  );
+  const { pixels } = header;
+
+  assert.equal(pixels.signed, true, 'CT numbers go below zero');
+  assert.equal(pixels.bitsStored, 16);
+  assert.equal(pixels.highBit, 15);
+  assert.equal(pixels.samplesPerPixel, 1);
+  assert.equal(pixels.photometricInterpretation, 'MONOCHROME2');
+  assert.equal(pixels.rescaleIntercept, -1024);
+  assert.equal(pixels.rescaleSlope, 2);
+  // The first window, not a merged one: choosing between them is the viewer's job.
+  assert.equal(pixels.windowCenter, 40);
+  assert.equal(pixels.windowWidth, 400);
+  assert.equal(pixels.encapsulated, false);
+});
+
+test('a file that leaves the rescale pair out still means something', async () => {
+  // MR routinely omits it. A viewer that reads a missing slope as zero draws a
+  // black rectangle and blames the data.
+  const header = await readHeader(put('no-rescale.dcm', sliceFile([pixelData(1024)])));
+
+  assert.equal(header.pixels.rescaleSlope, 1);
+  assert.equal(header.pixels.rescaleIntercept, 0);
+  assert.equal(header.pixels.windowCenter, undefined);
+  assert.equal(header.pixels.windowWidth, undefined);
+  assert.equal(header.pixels.signed, false, 'absent Pixel Representation means unsigned');
+});
+
+test('the pixel data is located without being read', async () => {
+  const header = await readHeader(
+    put('located.dcm', sliceFile([...MEANING, pixelData(512 * 512 * 2)]))
+  );
+  const { dataOffset, dataLength } = header.pixels;
+
+  assert.equal(dataLength, 512 * 512 * 2);
+  assert.ok(dataOffset !== undefined && dataOffset > 0);
+  assert.equal((dataOffset ?? 0) + (dataLength ?? 0), header.fileSize);
+  assert.equal(header.pixels.complete, true);
+});
+
+test('a file that stops before the pixels it promised says so', async () => {
+  // A partial copy, or a transfer that was interrupted. It still belongs in the
+  // list; it just cannot be drawn, and finding that out here is cheaper than
+  // finding out at display time.
+  const whole = sliceFile([...MEANING, pixelData(512 * 512 * 2)]);
+  const cut = whole.subarray(0, whole.length - 1000);
+
+  const header = await readHeader(put('cut-short.dcm', cut));
+
+  assert.equal(header.pixels.dataLength, 512 * 512 * 2);
+  assert.equal(header.pixels.complete, false);
+});
+
+test('an image with no pixel data at all is not complete', async () => {
+  const header = await readHeader(put('header-only.dcm', sliceFile(MEANING)));
+
+  assert.equal(header.pixels.dataOffset, undefined);
+  assert.equal(header.pixels.complete, false);
 });

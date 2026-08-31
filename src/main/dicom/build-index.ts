@@ -18,17 +18,15 @@
  * Everything here is pure, and takes headers rather than paths, so the awkward
  * arrangements can be written down in a test instead of waited for.
  */
-import type { InstanceHeader } from './read-header';
+import type { InstanceHeader, PixelLayout } from './read-header';
 
 export interface Instance {
   sopInstanceUid: string;
   instanceNumber: number | undefined;
   filePath: string;
   fileSize: number;
-  rows: number | undefined;
-  columns: number | undefined;
-  numberOfFrames: number;
-  transferSyntaxUid: string;
+  /** Everything needed to draw the image, carried whole rather than picked apart. */
+  pixels: PixelLayout;
   /** Distance along the stack, when the geometry was there to compute it. */
   slicePosition: number | undefined;
 }
@@ -132,10 +130,7 @@ function buildSeries(headers: InstanceHeader[]): Series {
     instanceNumber: header.instanceNumber,
     filePath: header.filePath,
     fileSize: header.fileSize,
-    rows: header.rows,
-    columns: header.columns,
-    numberOfFrames: header.numberOfFrames,
-    transferSyntaxUid: header.transferSyntaxUid,
+    pixels: header.pixels,
     slicePosition: positions?.get(header.sopInstanceUid),
   }));
 

@@ -22,7 +22,7 @@ function SeriesRow({ series }: { series: Series }): React.ReactElement {
       <span className="series__name">{series.description || 'unnamed series'}</span>
       <span className="series__count">{series.instances.length} img</span>
       <span className="series__shape">
-        {first ? `${first.columns ?? '?'} x ${first.rows ?? '?'}` : ''}
+        {first ? `${first.pixels.columns ?? '?'} x ${first.pixels.rows ?? '?'}` : ''}
       </span>
       {/* Worth saying out loud: a stack ordered by number rather than by
           position is a stack that may be upside down, and the only place that

@@ -28,6 +28,58 @@ const FIRST_READ = 16 * 1024;
 const PREAMBLE_LENGTH = 128;
 const MAGIC = 'DICM';
 
+/**
+ * Everything about the image itself, kept together.
+ *
+ * These are the fields that decide what a pixel means: how wide it is, whether
+ * it is signed, what to add and multiply to turn it into Hounsfield units, and
+ * where the bytes are in the file. Split across an index and a viewer they
+ * drift apart; a viewer that reads the width from one place and the sign from
+ * another eventually draws a study inside out.
+ */
+export interface PixelLayout {
+  rows: number | undefined;
+  columns: number | undefined;
+  /** Absent means one frame. A viewer that reads absent as zero shows nothing. */
+  numberOfFrames: number;
+
+  bitsAllocated: number | undefined;
+  bitsStored: number | undefined;
+  highBit: number | undefined;
+  /** Pixel Representation 1. CT numbers go below zero, so this is usually true. */
+  signed: boolean;
+  samplesPerPixel: number;
+  photometricInterpretation: string;
+  planarConfiguration: number | undefined;
+
+  /**
+   * Millimetres per pixel, across and down.
+   *
+   * Not always equal, and not always present. A viewer that assumes square
+   * pixels draws an ultrasound sector as an oval and measures a circle as an
+   * ellipse, which is a measurement someone might report.
+   */
+  pixelSpacing: number[] | undefined;
+
+  /** stored value * slope + intercept = the real measurement. */
+  rescaleSlope: number;
+  rescaleIntercept: number;
+
+  /** The window the scanner suggested, if it suggested one. */
+  windowCenter: number | undefined;
+  windowWidth: number | undefined;
+
+  transferSyntaxUid: string;
+  /** True when the pixels are compressed and arrive as fragments rather than a block. */
+  encapsulated: boolean;
+
+  /** Where the pixel data starts in the file, and how long it says it is. */
+  dataOffset: number | undefined;
+  dataLength: number | undefined;
+  /** False when the declared pixel data runs past the end of the file. */
+  complete: boolean;
+}
+
 /** One image, as far as an index needs to care. */
 export interface InstanceHeader {
   filePath: string;
@@ -53,18 +105,12 @@ export interface InstanceHeader {
   sopClassUid: string;
   instanceNumber: number | undefined;
 
-  rows: number | undefined;
-  columns: number | undefined;
-  bitsAllocated: number | undefined;
-  numberOfFrames: number;
+  pixels: PixelLayout;
 
   /** Where this slice sits in the patient, when the file says. */
   imagePositionPatient: number[] | undefined;
   imageOrientationPatient: number[] | undefined;
-  pixelSpacing: number[] | undefined;
   sliceThickness: number | undefined;
-
-  transferSyntaxUid: string;
 }
 
 /** A file that could not be read, and why — never thrown away silently. */
@@ -116,6 +162,16 @@ function decimals(dataSet: dicomParser.DataSet, tag: string, expected: number): 
   return parts;
 }
 
+/** The first value of a decimal string that may carry several. */
+function firstDecimal(dataSet: dicomParser.DataSet, tag: string): number | undefined {
+  const raw = dataSet.string(tag);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const first = Number.parseFloat(raw.split(String.fromCharCode(92))[0] ?? '');
+  return Number.isFinite(first) ? first : undefined;
+}
+
 /** DICOM writes names with carets between the components. */
 function readableName(raw: string): string {
   return raw
@@ -123,6 +179,61 @@ function readableName(raw: string): string {
     .map(part => part.trim())
     .filter(Boolean)
     .join(' ');
+}
+
+/**
+ * The image layout, with the defaults the standard allows a file to leave out.
+ *
+ * Every fallback here is a real file somewhere: an MR that omits the rescale
+ * pair, an anonymiser that drops the suggested window, a secondary capture with
+ * no photometric interpretation. A viewer that treats a missing slope as zero
+ * shows a black rectangle and blames the data.
+ */
+function extractPixels(
+  dataSet: dicomParser.DataSet,
+  fileSize: number
+): PixelLayout {
+  const element = dataSet.elements[PIXEL_DATA];
+  const dataOffset = element?.dataOffset;
+  const dataLength = element?.length;
+
+  return {
+    rows: dataSet.uint16('x00280010'),
+    columns: dataSet.uint16('x00280011'),
+    numberOfFrames: integer(dataSet, 'x00280008') ?? 1,
+
+    bitsAllocated: dataSet.uint16('x00280100'),
+    bitsStored: dataSet.uint16('x00280101'),
+    highBit: dataSet.uint16('x00280102'),
+    signed: dataSet.uint16('x00280103') === 1,
+    samplesPerPixel: dataSet.uint16('x00280002') ?? 1,
+    photometricInterpretation: text(dataSet, 'x00280004') || 'MONOCHROME2',
+    planarConfiguration: dataSet.uint16('x00280006'),
+
+    pixelSpacing: decimals(dataSet, 'x00280030', 2),
+
+    rescaleSlope: decimal(dataSet, 'x00281053') ?? 1,
+    rescaleIntercept: decimal(dataSet, 'x00281052') ?? 0,
+
+    // Both can carry several values - a soft tissue window and a bone window in
+    // one file. The first is the one the scanner put first, and choosing among
+    // them is the viewer's business, not the index's.
+    windowCenter: firstDecimal(dataSet, 'x00281050'),
+    windowWidth: firstDecimal(dataSet, 'x00281051'),
+
+    transferSyntaxUid: text(dataSet, 'x00020010'),
+    encapsulated: element?.encapsulatedPixelData === true || element?.hadUndefinedLength === true,
+
+    dataOffset,
+    dataLength,
+    // A file that stops before the pixel data it promised is a partial copy or
+    // an interrupted transfer. It still belongs in the list; it just cannot be
+    // drawn, and saying so here is cheaper than finding out at display time.
+    complete:
+      dataOffset === undefined || dataLength === undefined
+        ? false
+        : dataOffset + dataLength <= fileSize,
+  };
 }
 
 function extract(dataSet: dicomParser.DataSet, filePath: string, fileSize: number): InstanceHeader {
@@ -150,18 +261,11 @@ function extract(dataSet: dicomParser.DataSet, filePath: string, fileSize: numbe
     sopClassUid: text(dataSet, 'x00080016'),
     instanceNumber: integer(dataSet, 'x00200013'),
 
-    rows: dataSet.uint16('x00280010'),
-    columns: dataSet.uint16('x00280011'),
-    bitsAllocated: dataSet.uint16('x00280100'),
-    // Absent means one. A viewer that treats absent as zero shows nothing.
-    numberOfFrames: integer(dataSet, 'x00280008') ?? 1,
+    pixels: extractPixels(dataSet, fileSize),
 
     imagePositionPatient: decimals(dataSet, 'x00200032', 3),
     imageOrientationPatient: decimals(dataSet, 'x00200037', 6),
-    pixelSpacing: decimals(dataSet, 'x00280030', 2),
     sliceThickness: decimal(dataSet, 'x00180050'),
-
-    transferSyntaxUid: text(dataSet, 'x00020010'),
   };
 }
 

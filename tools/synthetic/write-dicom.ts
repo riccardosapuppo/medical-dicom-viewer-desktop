@@ -24,6 +24,15 @@ export interface Element {
   element: number;
   vr: VR;
   value: string | number | number[] | Uint8Array;
+  /**
+   * The complete bytes of the element, tag and length included.
+   *
+   * Escape hatch for the shapes that are not "tag, length, value" — the only
+   * one here being encapsulated pixel data, which is a length of all ones
+   * followed by a sequence of items. The tag is still given above so the
+   * element lands in the right place in the ordering.
+   */
+  raw?: Uint8Array;
 }
 
 /** VRs whose length field is four bytes, behind two reserved ones. */
@@ -65,7 +74,10 @@ function encodeValue(vr: VR, value: Element['value']): Uint8Array {
   return new Uint8Array(Buffer.from(padded, 'latin1'));
 }
 
-function encodeElement({ group, element, vr, value }: Element): Uint8Array {
+function encodeElement({ group, element, vr, value, raw }: Element): Uint8Array {
+  if (raw) {
+    return raw;
+  }
   const body = encodeValue(vr, value);
   const long = LONG_FORM.has(vr);
   const header = new Uint8Array(long ? 12 : 8);
@@ -93,7 +105,10 @@ function encodeElement({ group, element, vr, value }: Element): Uint8Array {
  * from a dictionary instead of being told, which is exactly the case worth
  * having a fixture for.
  */
-function encodeImplicitElement({ group, element, vr, value }: Element): Uint8Array {
+function encodeImplicitElement({ group, element, vr, value, raw }: Element): Uint8Array {
+  if (raw) {
+    return raw;
+  }
   const body = encodeValue(vr, value);
   const header = new Uint8Array(8);
   const view = new DataView(header.buffer);
@@ -108,6 +123,56 @@ function encodeImplicitElement({ group, element, vr, value }: Element): Uint8Arr
 /** Sorts by tag, because a reader is entitled to stop at the first one past what it wants. */
 function inTagOrder(elements: Element[]): Element[] {
   return [...elements].sort((a, b) => a.group - b.group || a.element - b.element);
+}
+
+const UNDEFINED_LENGTH = 0xffffffff;
+const ITEM = { group: 0xfffe, element: 0xe000 };
+const SEQUENCE_DELIMITER = { group: 0xfffe, element: 0xe0dd };
+
+function item(tag: { group: number; element: number }, body: Uint8Array): Uint8Array {
+  const header = new Uint8Array(8);
+  const view = new DataView(header.buffer);
+  view.setUint16(0, tag.group, true);
+  view.setUint16(2, tag.element, true);
+  view.setUint32(4, body.length, true);
+  return Buffer.concat([header, body]);
+}
+
+/**
+ * Pixel data as a compressed transfer syntax stores it.
+ *
+ * Not a block of bytes with a length, but a length of all ones followed by
+ * items: an offset table, then one item per fragment, then a delimiter. Written
+ * here so that "the viewer refuses compressed pixels" can be tested against a
+ * file that really is compressed, rather than against one that merely lacks
+ * pixel data — which fails for an entirely different reason and would have let
+ * a broken refusal pass.
+ */
+export function encapsulatedPixelData(fragments: Uint8Array[]): Element {
+  const header = new Uint8Array(12);
+  const view = new DataView(header.buffer);
+  view.setUint16(0, 0x7fe0, true);
+  view.setUint16(2, 0x0010, true);
+  header[4] = 'O'.charCodeAt(0);
+  header[5] = 'B'.charCodeAt(0);
+  view.setUint32(8, UNDEFINED_LENGTH, true);
+
+  const body = Buffer.concat([
+    // An empty basic offset table: legal, and what most encoders write.
+    item(ITEM, new Uint8Array(0)),
+    ...fragments.map(fragment =>
+      item(ITEM, fragment.length % 2 === 0 ? fragment : Buffer.concat([fragment, new Uint8Array(1)]))
+    ),
+    item(SEQUENCE_DELIMITER, new Uint8Array(0)),
+  ]);
+
+  return {
+    group: 0x7fe0,
+    element: 0x0010,
+    vr: 'OB',
+    value: new Uint8Array(0),
+    raw: Buffer.concat([header, body]),
+  };
 }
 
 export interface FileMeta {

@@ -73,7 +73,7 @@ async function main(): Promise<void> {
           `    ${String(series.seriesNumber ?? '-').padStart(3)}. ` +
             `${(series.description || '(no description)').padEnd(28)} ` +
             `${String(series.instances.length).padStart(4)} img  ` +
-            `${shape?.columns ?? '?'}x${shape?.rows ?? '?'}  ` +
+            `${shape?.pixels.columns ?? '?'}x${shape?.pixels.rows ?? '?'}  ` +
             `${readableSize(bytes).padStart(8)}  ` +
             `${series.orderedByGeometry ? 'ordered by position' : 'ordered by number'}`
         );
