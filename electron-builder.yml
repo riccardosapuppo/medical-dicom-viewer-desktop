@@ -1,0 +1,77 @@
+# How the application is packaged for the three systems.
+#
+# Two things here are deliberate and worth reading before changing.
+#
+# `files` lists what goes inside, and it is a small list on purpose: the built
+# main process, preload, indexer and renderer, and nothing else. The sources,
+# the tests, the mutation harness and the synthetic data generator are how this
+# is built, not what is installed, and an installer that carries them is an
+# installer that ships a second copy of everything it already contains.
+#
+# Nothing here signs anything. Code signing needs a certificate that belongs to
+# a person or a company, is bought rather than configured, and cannot be checked
+# into a repository. The configuration is real and complete up to that point;
+# what is missing is the certificate, and the README says so rather than
+# implying a signed pipeline that does not exist.
+
+appId: com.riccardosapuppo.dicomworkstation
+productName: DICOM Workstation
+copyright: Copyright (c) 2026 Riccardo Sapuppo
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/app/**/*
+  - package.json
+
+# Read at run time from the installed application rather than bundled, because
+# it carries a native binding for the platform it was installed on.
+asarUnpack: []
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+
+nsis:
+  # A reading room installs this on machines it does not administer, so the
+  # per-user install that needs no elevation is the one that works.
+  perMachine: false
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: DICOM Workstation
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  icon: build/icon.png
+  category: public.app-category.medical
+  # Without this a hardened runtime is requested and notarisation is expected,
+  # and the build fails on a machine with no certificate rather than producing
+  # an unsigned bundle that can at least be run locally.
+  hardenedRuntime: false
+  identity: null
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  icon: build/icon.png
+  category: Science
+  desktop:
+    entry:
+      Comment: Read DICOM studies from disk, on the screens you have
+
+# Where an installed copy would look for a newer one. Configured, and nothing is
+# published to it: there is no release feed, and the README says so. Written
+# down because the address is part of the design, not something to invent later.
+publish:
+  - provider: github
+    owner: riccardosapuppo
+    repo: dicom-workstation
+    releaseType: draft

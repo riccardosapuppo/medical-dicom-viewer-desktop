@@ -1,8 +1,13 @@
 # DICOM Workstation
 
-A desktop reading workstation for CT and MR studies: native windows placed on
-the panes of glass they belong to, arrangements that come back the next
-morning, and studies read straight off the disk.
+A desktop reading workstation: native windows placed on the panes of glass they
+belong to, arrangements that come back the next morning, and studies read
+straight off the disk.
+
+It opens any DICOM study whose pixel data is uncompressed and greyscale — CT,
+MR, computed and digital radiography, and anything else stored that way.
+Nothing here decides by modality. What it will not open is stated at the bottom,
+and it is about how the pixels are stored, not about what was scanned.
 
 The original was built for a client and lives in a private repository. This is
 an independent reimplementation, written from scratch with synthetic data.
@@ -23,6 +28,8 @@ npm run displays           # what screens are attached, and this desk's fingerpr
 npm test
 npm run check:ui           # drives the built application and reads the canvas back
 npm run mutations          # breaks the code on purpose, checks the tests notice
+npm run package            # an installer for the system you are on
+npm run check:packaged     # the same interface checks, against the packaged build
 ```
 
 ![A series open](docs/viewer.png)
@@ -318,6 +325,47 @@ which is the property it was supposed to be testing.
 The suite it runs against is checked too: `npm run mutations` refuses to start
 if any test is already failing, because against a red suite every mutation
 looks caught and the report comes out perfect while proving nothing.
+## Installing it
+
+```
+npm run package        # an installer for the system you are on
+npm run package:dir    # the same application, unpacked, without an installer
+npm run check:packaged # the interface checks, driven against the packaged build
+```
+
+On Windows that produces an 81 MB installer that installs per user and needs
+no administrator: a reading room installs software on machines it does not
+administer, and an installer that demands elevation is one that does not get
+run. macOS gets a disk image and Linux an AppImage, from the same
+configuration.
+
+`check:packaged` runs every one of the interface checks against the built
+application rather than against the development one. That is where packaging
+mistakes live and nowhere else — a renderer left out of the archive, a path
+that worked relative to the project and does not relative to an installed
+application, a file the build configuration quietly excluded. Every one of
+them looks perfect in development and gives a blank window to whoever installs
+it.
+
+The icon is drawn by `npm run icon`, in about fifty lines and with nothing but
+zlib. The alternative was a binary in the repository that nobody can see the
+provenance of, or an image library in a project that has no other use for one.
+
+### Signing and updates, honestly
+
+Neither is done, and the configuration says where they would go.
+
+Code signing needs a certificate that belongs to a person or a company, is
+bought rather than configured, and cannot be checked into a repository. The
+build is complete up to that point and produces an unsigned application, which
+Windows will warn about on first run and macOS will refuse to open without
+being told to.
+
+The update feed is configured — provider, owner, repository — and nothing is
+published to it. An installed copy would look for a newer one at that address
+and find nothing there. The address is written down because it is part of the
+design, not because a release exists.
+
 ## What an adversarial reading found
 
 Twelve readers were set on this code with instructions to break it, each one
@@ -364,9 +412,6 @@ one inclusion to find.
 
 ## Limits, honestly
 
-- Only uncompressed pixel data is drawn. A compressed series is listed, its
-  rows in the worklist cannot be opened, and asking for a frame comes back as
-  415 naming the transfer syntax that was found.
 - One image per window. No side-by-side layouts inside a window, and no linked
   scrolling between windows.
 - Reformatting is orthogonal only: coronal and sagittal, cut at whole voxels.
@@ -380,9 +425,6 @@ one inclusion to find.
 - Windows already open are not re-placed when a monitor is unplugged
   mid-session. The system moves them somewhere visible and the new desk gets
   its own arrangement from then on.
-- The window opens on the primary screen at a workable size. Placing it on the
-  reporting monitor, and putting it back where it was, is what the fingerprint
-  is for and is not built yet.
 - Verified on Windows 11 against a single built-in screen. Every multi-monitor
   case here — a screen to the left of the primary and so at negative
   coordinates, a portrait pair, a taskbar taking space off one edge — is
@@ -390,8 +432,13 @@ one inclusion to find.
   way to test it without owning it. None of it has met real hardware.
 - Explicit and implicit VR little endian are read, and both are covered by
   tests. Big endian is not handled. Compressed transfer syntaxes read their
-  headers fine, which is all the index needs, but nothing decodes pixel data
-  yet because nothing displays it yet.
+  headers fine, which is all the index needs, and asking for a frame comes back
+  as 415 naming the syntax that was found: nothing decodes JPEG, JPEG 2000 or
+  RLE.
+- Greyscale only. An ultrasound or a doppler image stored as colour is listed
+  correctly and cannot be displayed: the shader reads one sample per pixel. This
+  is a limit of how the pixels are stored, not of the modality — a monochrome
+  ultrasound opens like anything else.
 - Files without the 128-byte preamble and `DICM` marker are treated as not
   DICOM. Raw datasets written without a Part 10 wrapper will be skipped.
 - `physical` is `bounds x scaleFactor` — the panel's real pixel count as the

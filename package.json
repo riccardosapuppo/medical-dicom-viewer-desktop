@@ -16,24 +16,33 @@
     "demo-data": "esbuild tools/make-demo-data.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/make-demo-data.js && node dist/make-demo-data.js",
     "build": "node tools/build-app.mjs",
     "start": "npm run build && electron .",
-    "check:ui": "npm run build && node scripts/ui.mjs"
+    "check:ui": "npm run build && node scripts/ui.mjs",
+    "icon": "node tools/make-icon.mjs",
+    "package": "npm run build && electron-builder --publish never",
+    "package:dir": "npm run build && electron-builder --dir --publish never",
+    "check:packaged": "npm run package:dir && node scripts/ui.mjs --packaged"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "electron": "^33.3.1",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.24.2",
     "playwright-core": "^1.62.1",
     "typescript": "^5.7.2"
   },
   "allowScripts": {
     "electron@33.4.11": true,
-    "esbuild@0.24.2": true
+    "esbuild@0.24.2": true,
+    "electron-winstaller@5.4.0": true
   },
   "dependencies": {
     "dicom-parser": "^1.8.21",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
+  },
+  "author": {
+    "name": "Riccardo Sapuppo"
   }
 }

@@ -31,15 +31,41 @@ if (!fs.existsSync(folder)) {
   process.exit(1);
 }
 
-const electron = path.join(
-  root,
-  'node_modules',
-  'electron',
-  'dist',
-  process.platform === 'win32' ? 'electron.exe' : 'electron'
-);
+/**
+ * Which copy of the application to drive.
+ *
+ * With --packaged, the one electron-builder produced. That is where packaging
+ * mistakes live and nowhere else: a renderer left out of the asar, a path that
+ * worked relative to the project and does not relative to an installed
+ * application, a file the build config quietly excluded. All of them look
+ * perfect in development and give a blank window to whoever installs it.
+ */
+const packaged = process.argv.includes('--packaged');
 
-const child = spawn(electron, [root, '--open', folder, `--remote-debugging-port=${PORT}`], {
+const unpacked = path.join(root, 'release', 'win-unpacked', 'DICOM Workstation.exe');
+const executable = packaged
+  ? unpacked
+  : path.join(
+      root,
+      'node_modules',
+      'electron',
+      'dist',
+      process.platform === 'win32' ? 'electron.exe' : 'electron'
+    );
+
+if (packaged && !fs.existsSync(unpacked)) {
+  console.error('There is no packaged build. Run: npm run package:dir');
+  process.exit(1);
+}
+
+// An installed application is given no project directory: it is the project.
+const args = packaged
+  ? ['--open', folder, `--remote-debugging-port=${PORT}`]
+  : [root, '--open', folder, `--remote-debugging-port=${PORT}`];
+
+console.log(`  driving the ${packaged ? 'packaged build' : 'development build'}`);
+
+const child = spawn(executable, args, {
   cwd: root,
   stdio: 'ignore',
   // Electron obeys this from the surrounding shell and starts as plain Node.
@@ -283,7 +309,9 @@ try {
   // Taken here rather than by the application itself, because the screens a
   // series can be sent to only appear under the pointer, and a screenshot of
   // the feature has to have the pointer on it.
-  await page.screenshot({ path: path.join(root, 'docs', 'library.png') });
+  if (!packaged) {
+    await page.screenshot({ path: path.join(root, 'docs', 'library.png') });
+  }
   const second = context.waitForEvent('page', { timeout: 30000 });
   await row.locator('.screen').first().click();
   const reading = await second;
@@ -375,7 +403,9 @@ try {
     `${anatomy.width} by ${anatomy.height} is ${shape.toFixed(2)} to one, expected about 4.59`
   );
 
-  await page.screenshot({ path: path.join(root, 'docs', 'reformat.png') });
+  if (!packaged) {
+    await page.screenshot({ path: path.join(root, 'docs', 'reformat.png') });
+  }
 
   await page.getByRole('button', { name: 'Sagittal' }).click();
   await page.waitForFunction(() => !document.querySelector('.viewport__notice'), undefined, {
@@ -490,8 +520,10 @@ try {
     `${counted} measurements, ${withRegion} pixels of ink before and ${afterClick} after`
   );
   await page.getByRole('button', { name: 'Window' }).click();
-  await page.screenshot({ path: path.join(root, 'docs', 'viewer.png') });
-  console.log(`\n  wrote docs/viewer.png`);
+  if (!packaged) {
+    await page.screenshot({ path: path.join(root, 'docs', 'viewer.png') });
+    console.log(`\n  wrote docs/library.png, docs/viewer.png and docs/reformat.png`);
+  }
 
   check('nothing raised', problems.length === 0, problems.slice(0, 3).join(' | '));
 } finally {
