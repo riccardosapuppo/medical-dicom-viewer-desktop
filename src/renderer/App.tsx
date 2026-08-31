@@ -15,11 +15,13 @@ import { DeskMap } from './DeskMap';
 import { tailOfPath } from './format';
 import { Library } from './Library';
 import { useLibrary } from './useLibrary';
+import { Viewport, type Opened } from './viewer/Viewport';
 
 export function App(): React.ReactElement {
   const [desk, setDesk] = useState<Desk | undefined>(undefined);
   const [changedAt, setChangedAt] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [opened, setOpened] = useState<Opened | undefined>(undefined);
   const library = useLibrary();
 
   useEffect(() => {
@@ -41,6 +43,9 @@ export function App(): React.ReactElement {
     setDragging(false);
     const file = event.dataTransfer.files[0];
     if (file) {
+      // A folder dropped while a series is open replaces both: the image on
+      // screen belongs to a folder that is no longer the one being read.
+      setOpened(undefined);
       library.read(window.workstation.pathOfDropped(file));
     }
   };
@@ -70,7 +75,11 @@ export function App(): React.ReactElement {
         </div>
       </header>
 
-      <Body desk={desk} deskKey={changedAt} library={library} />
+      {opened ? (
+        <Viewport opened={opened} onClose={() => setOpened(undefined)} />
+      ) : (
+        <Body desk={desk} deskKey={changedAt} library={library} onOpen={setOpened} />
+      )}
 
       <footer className="status">
         <span className="status__key">desk</span>
@@ -103,10 +112,12 @@ function Body({
   desk,
   deskKey,
   library,
+  onOpen,
 }: {
   desk: Desk | undefined;
   deskKey: number;
   library: ReturnType<typeof useLibrary>;
+  onOpen: (opened: Opened) => void;
 }): React.ReactElement {
   const { state } = library;
 
@@ -148,7 +159,7 @@ function Body({
   if (state.status === 'ready') {
     return (
       <section className="panel panel--list">
-        <Library reading={state.reading} />
+        <Library reading={state.reading} onOpen={onOpen} />
       </section>
     );
   }

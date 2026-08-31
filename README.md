@@ -9,8 +9,8 @@ an independent reimplementation, written from scratch with synthetic data.
 
 ## Where it is
 
-Early, and honest about it. A folder of studies opens and reads into a
-worklist. Nothing displays an image yet.
+A folder of studies opens, reads into a worklist, and a series opens onto an
+image you can scroll, window, zoom and pan.
 
 ```
 npm install
@@ -20,15 +20,65 @@ npm start -- --open ./demo-data
 npm run index -- ./demo-data   # the same reading, in the terminal, no window
 npm run displays           # what screens are attached, and this desk's fingerprint
 npm test
+npm run check:ui           # drives the built application and reads the canvas back
 npm run mutations          # breaks the code on purpose, checks the tests notice
 ```
 
-![The reading list](docs/library.png)
+![A series open](docs/viewer.png)
 
-Drop a folder anywhere in the window, choose one, or name it on the command
-line. A second launch hands its arguments to the first rather than starting a
-rival copy, which is how a study opened from the file manager will arrive.
+Drag to window, wheel to scroll the stack, middle to pan, right to zoom,
+double click to reset — the mapping every reporting workstation uses. Matching
+it is not imitation: somebody who reads all day has it in their hands, and a
+viewer that puts zoom on the left button gets the window changed by accident on
+the first study. Arrow keys, page up and down, home and end do the same thing,
+because a viewer reachable only by dragging is one that some people cannot use.
 
+## Drawing the image
+
+The stored numbers go to the graphics card untouched, as an integer texture,
+and the sign correction, the rescale and the window are done in the fragment
+shader. Not an optimisation for its own sake: windowing on the processor means
+rebuilding a quarter of a million pixels every time the mouse moves one pixel,
+and window and level are dragged continuously. On the card it is one uniform.
+
+Sampling is nearest, always. An integer texture cannot be filtered at all in
+WebGL2, and that turns out to be the right constraint: interpolation invents
+pixel values that were never measured, and a number someone reports on should
+be one the scanner produced.
+
+The window arithmetic is the linear VOI transformation from PS3.3 C.11.2.1.2,
+half-unit offsets included. They look like rounding noise. On a bone window
+fifteen hundred units wide, dropping them is invisible; on a brain window
+eighty units wide it is most of a grey level, so the test that guards them
+asserts an exact value rather than "about a half" — which is exactly what the
+broken version also gives.
+
+Frames arrive one at a time over the `dicom:` scheme, described below. The
+viewer keeps a bounded number of them and asks ahead in the direction of
+travel: somebody scrolling down wants the next slice, and a symmetric prefetch
+spends half its work behind them.
+
+## The `dicom:` scheme
+
+The page needs the bytes of a frame and must not be given the disk to find them
+with. So it asks for an image by the name the standard already gives it:
+
+```
+dicom://instance/<sop-instance-uid>/frames/<n>
+```
+
+and the main process answers only for images in the folder that is currently
+open. A path is not something the page can express at all, and a UID that was
+never indexed comes back as 404 rather than as a refusal — saying "forbidden"
+would tell the page that the image exists somewhere, which is more than it is
+entitled to know. Opening another folder replaces what can be asked for; there
+is no moment at which a viewer holds a handle on a folder the user has closed.
+
+Range requests are answered properly, with 206 and a `Content-Range`. A partial
+request that is silently given the whole body is worse than one that fails: the
+caller gets bytes at the wrong offset and draws noise without knowing it. A
+range past the end of a frame is refused rather than clamped, because the byte
+after the last one of frame 1 is the first one of frame 2.
 ## Where the reading happens
 
 Not in the window, and not in the page.
@@ -128,6 +178,29 @@ an unnumbered slice sorts last was passing against a deliberately broken
 comparison, because with three elements the sort happens to come out right
 anyway.
 
+## Looking at what was actually drawn
+
+`npm run check:ui` opens the built application on the demo folder, clicks the
+largest series, and reads the pixels back off the canvas. Unit tests cannot say
+that an image reached the screen: a shader that fails to compile, a texture
+uploaded in the wrong format, a canvas sized to nothing and a window that is
+entirely black all pass every other test here.
+
+It checks that a quarter of the canvas is not black, that there is a range of
+greys rather than one flat tone, that scrolling produces a genuinely different
+picture, that dragging changes the window and the picture with it, and that a
+preset lands on exactly the numbers it names.
+
+Two things it taught immediately. The first version reported a uniformly black
+screen while the application was plainly drawing: with `preserveDrawingBuffer`
+off, the buffer is cleared as soon as it has been composited, so anything that
+reads it in a later task reads zeros. The measurement was wrong, not the
+drawing. And the first test for "a different slice looks different" compared
+the mean brightness, which is far too blunt — the difference between
+neighbouring slices is a couple of per cent of a couple of per cent of the
+frame. It now compares a hash of the greys, and breaking the texture upload on
+purpose confirms it notices.
+
 ## No patient data
 
 There is none in this repository and there never will be. `npm run demo-data`
@@ -139,8 +212,13 @@ one inclusion to find.
 
 ## Limits, honestly
 
-- No image is displayed yet. A folder reads into a worklist; opening a series
-  is the next thing.
+- Only uncompressed pixel data is drawn. A compressed series is listed, its
+  rows in the worklist cannot be opened, and asking for a frame comes back as
+  415 naming the transfer syntax that was found.
+- One image at a time. No side-by-side layouts, no prior study alongside the
+  current one, no measurements, no reformatting, and no second window on a
+  second monitor — which is the point of the desk fingerprint and is the next
+  thing to build.
 - The window opens on the primary screen at a workable size. Placing it on the
   reporting monitor, and putting it back where it was, is what the fingerprint
   is for and is not built yet.

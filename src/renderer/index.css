@@ -506,3 +506,198 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- the reading surface ------------------------------------------------- */
+
+.viewport {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.viewport__bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.viewport__title {
+  font-weight: 600;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.viewport__series {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.viewport__presets {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.chip {
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink-faint);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  color: var(--ink);
+  border-color: var(--line-bright);
+}
+
+.chip--on {
+  color: var(--live);
+  border-color: var(--live-dim);
+}
+
+.chip:focus-visible,
+.series__open:focus-visible {
+  outline: 1px solid var(--live);
+  outline-offset: 1px;
+}
+
+/* The image sits on black, not on the interface grey: any surround lighter
+   than the darkest part of the image changes how the image is read. */
+.viewport__stage {
+  position: relative;
+  min-height: 0;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.viewport__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.overlay {
+  position: absolute;
+  display: grid;
+  gap: 1px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  /* The overlay is read, never clicked: every drag belongs to the image. */
+  pointer-events: none;
+  text-shadow: 0 0 4px #000;
+}
+
+.overlay strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.overlay__quiet {
+  color: var(--ink-faint);
+}
+
+.overlay--top-left {
+  top: 12px;
+  left: 14px;
+}
+
+.overlay--top-right {
+  top: 12px;
+  right: 14px;
+  text-align: right;
+  justify-items: end;
+}
+
+.overlay--bottom-left {
+  bottom: 12px;
+  left: 14px;
+}
+
+.overlay--bottom-right {
+  bottom: 12px;
+  right: 14px;
+  text-align: right;
+  justify-items: end;
+}
+
+.viewport__loading,
+.viewport__notice {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  color: var(--ink-faint);
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.viewport__notice h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.viewport__notice p {
+  margin: 0;
+  max-width: 58ch;
+}
+
+.viewport__reason {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.viewport__hint {
+  display: flex;
+  gap: 18px;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.viewport__hint span::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-right: 7px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--line-bright);
+}
+
+/* A series row is a button now, and has to keep the grid it had as a list item. */
+.series__open {
+  display: contents;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.series:hover {
+  color: var(--ink);
+}
+
+.series:has(.series__open:disabled) {
+  opacity: 0.45;
+  cursor: default;
+}

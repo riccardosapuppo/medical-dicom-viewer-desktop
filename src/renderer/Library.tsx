@@ -11,13 +11,31 @@ import React, { useState } from 'react';
 import type { Patient, Series, Study } from '../main/dicom/build-index';
 
 import { age, readableDate, readableTime } from './format';
+import type { Opened } from './viewer/Viewport';
 import type { LibraryReading } from './useLibrary';
 
-function SeriesRow({ series }: { series: Series }): React.ReactElement {
+function SeriesRow({
+  series,
+  onOpen,
+}: {
+  series: Series;
+  onOpen: () => void;
+}): React.ReactElement {
   const first = series.instances[0];
+  // A series with nothing in it, or nothing that can be drawn, is listed but
+  // not opened: a viewport that opens onto an error is worse than a row that
+  // does not respond to a click.
+  const openable = series.instances.some(i => i.pixels.complete && !i.pixels.encapsulated);
 
   return (
     <li className="series">
+      <button
+        type="button"
+        className="series__open"
+        onClick={onOpen}
+        disabled={!openable}
+        title={openable ? 'Open this series' : 'Nothing in this series can be displayed yet'}
+      >
       <span className="series__number">{series.seriesNumber ?? '--'}</span>
       <span className="series__name">{series.description || 'unnamed series'}</span>
       <span className="series__count">{series.instances.length} img</span>
@@ -30,11 +48,20 @@ function SeriesRow({ series }: { series: Series }): React.ReactElement {
       <span className={series.orderedByGeometry ? 'series__order' : 'series__order series__order--weak'}>
         {series.orderedByGeometry ? 'by position' : 'by number'}
       </span>
+      </button>
     </li>
   );
 }
 
-function StudyBlock({ study, patient }: { study: Study; patient: Patient }): React.ReactElement {
+function StudyBlock({
+  study,
+  patient,
+  onOpen,
+}: {
+  study: Study;
+  patient: Patient;
+  onOpen: (opened: Opened) => void;
+}): React.ReactElement {
   const [open, setOpen] = useState(true);
 
   return (
@@ -56,7 +83,11 @@ function StudyBlock({ study, patient }: { study: Study; patient: Patient }): Rea
       {open ? (
         <ul className="series-list">
           {study.series.map(series => (
-            <SeriesRow key={series.seriesInstanceUid} series={series} />
+            <SeriesRow
+              key={series.seriesInstanceUid}
+              series={series}
+              onOpen={() => onOpen({ patient, study, series })}
+            />
           ))}
         </ul>
       ) : null}
@@ -64,7 +95,13 @@ function StudyBlock({ study, patient }: { study: Study; patient: Patient }): Rea
   );
 }
 
-export function Library({ reading }: { reading: LibraryReading }): React.ReactElement {
+export function Library({
+  reading,
+  onOpen,
+}: {
+  reading: LibraryReading;
+  onOpen: (opened: Opened) => void;
+}): React.ReactElement {
   const { patients } = reading.index;
 
   if (patients.length === 0) {
@@ -92,7 +129,12 @@ export function Library({ reading }: { reading: LibraryReading }): React.ReactEl
           </header>
 
           {patient.studies.map(study => (
-            <StudyBlock key={study.studyInstanceUid} study={study} patient={patient} />
+            <StudyBlock
+              key={study.studyInstanceUid}
+              study={study}
+              patient={patient}
+              onOpen={onOpen}
+            />
           ))}
         </section>
       ))}

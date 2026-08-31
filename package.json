@@ -15,7 +15,8 @@
     "index": "npm run build:index && node dist/index-report.js",
     "demo-data": "esbuild tools/make-demo-data.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/make-demo-data.js && node dist/make-demo-data.js",
     "build": "node tools/build-app.mjs",
-    "start": "npm run build && electron ."
+    "start": "npm run build && electron .",
+    "check:ui": "npm run build && node scripts/ui.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -23,6 +24,7 @@
     "@types/react-dom": "^19.2.5",
     "electron": "^33.3.1",
     "esbuild": "^0.24.2",
+    "playwright-core": "^1.62.1",
     "typescript": "^5.7.2"
   },
   "allowScripts": {
