@@ -358,6 +358,48 @@ const MUTATIONS = [
     "worklist: two unidentified patients are listed under one key",
   ],
   [
+    "src/renderer/viewer/volume.ts",
+    "      const from = (depth - 1 - z) * perSlice + y * columns;",
+    "      const from = z * perSlice + y * columns;",
+    "reformat: the coronal view comes out upside down",
+  ],
+  [
+    "src/renderer/viewer/volume.ts",
+    "      spacing: { x: volume.spacing.x, y: volume.spacing.z },",
+    "      spacing: { x: volume.spacing.x, y: volume.spacing.y },",
+    "reformat: the coronal view is drawn as though slices were as close as pixels",
+  ],
+  [
+    "src/renderer/viewer/volume.ts",
+    "      out[z * rows + y] = voxels[slice + y * columns + x] as number;",
+    "      out[z * rows + y] = voxels[slice + x * columns + y] as number;",
+    "reformat: the sagittal view reads the volume transposed",
+  ],
+  [
+    "src/renderer/viewer/volume.ts",
+    "  return plane === 'coronal' ? volume.rows : volume.columns;",
+    "  return plane === 'coronal' ? volume.columns : volume.rows;",
+    "reformat: the two planes are cut along each other axes",
+  ],
+  [
+    "src/renderer/viewer/volume.ts",
+    "    if (Math.abs(step - gap) > Math.abs(gap) * SPACING_TOLERANCE) {",
+    "    if (false) {",
+    "reformat: an unevenly spaced series is stretched instead of refused",
+  ],
+  [
+    "src/renderer/viewer/volume.ts",
+    "    if (pixels.columns !== columns || pixels.rows !== rows) {",
+    "    if (false) {",
+    "reformat: a localiser of three orthogonal images is treated as a solid",
+  ],
+  [
+    "src/renderer/viewer/volume.ts",
+    "  if (positions.some(p => p === undefined)) {",
+    "  if (false) {",
+    "reformat: a series with no positions is stacked at an invented spacing",
+  ],
+  [
     'src/renderer/format.ts',
     '  return years >= 0 && years < 130 ?',
     '  return true ?',

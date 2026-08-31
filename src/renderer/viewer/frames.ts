@@ -26,6 +26,15 @@ export interface Slide {
   /** One-based, the way DICOM counts frames. */
   frame: number;
   pixels: PixelLayout;
+  /**
+   * How far along the stack this image sits, in millimetres, when the file said.
+   *
+   * Carried here because reformatting needs it: the distance between slices is
+   * what turns a pile of pictures into a solid, and it cannot be taken from
+   * SliceThickness — a study can be reconstructed at one millimetre thick every
+   * five millimetres, and the two numbers mean different things.
+   */
+  position: number | undefined;
 }
 
 /**
@@ -42,6 +51,7 @@ export function slidesOf(series: Series): Slide[] {
       sopInstanceUid: instance.sopInstanceUid,
       frame: i + 1,
       pixels: instance.pixels,
+      position: instance.slicePosition,
     }))
   );
 }
@@ -167,6 +177,38 @@ export class FrameSource {
       }
       this.#cache.delete(oldest);
     }
+  }
+
+  /**
+   * Every image of the series, held at once.
+   *
+   * For reformatting, which needs the whole solid rather than a window onto it.
+   * The results are handed back in an array the caller holds, so the cache is
+   * free to evict them the moment it wants to: the cache exists to keep
+   * scrolling smooth, and a volume is a different kind of need.
+   *
+   * A few at a time rather than all at once. Four hundred simultaneous reads
+   * of one disk is slower than eight, not faster.
+   */
+  async collect(onProgress?: (done: number, total: number) => void): Promise<Frame[]> {
+    const total = this.slides.length;
+    const frames: Frame[] = new Array(total);
+    let next = 0;
+    let done = 0;
+
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const at = next++;
+        if (at >= total || this.#controller.signal.aborted) {
+          return;
+        }
+        frames[at] = await this.get(at);
+        onProgress?.(++done, total);
+      }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(8, total) }, worker));
+    return frames;
   }
 
   /**

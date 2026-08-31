@@ -21,6 +21,15 @@ import { drawMeasurements } from './draw-measurements';
 import { FrameSource, slidesOf } from './frames';
 import { unitFor, type Measurement } from './measure';
 import { canvasToImage } from './transform';
+import {
+  buildVolume,
+  planeDepth,
+  PLANES,
+  reformattable,
+  sliceFrom,
+  type Plane,
+  type Volume,
+} from './volume';
 import { createImageRenderer, type Frame, type ImageRenderer, type View } from './gl-image';
 import { defaultWindow, describeWindow, dragWindow, PRESETS, presetName, type Window as Voi } from './window-level';
 
@@ -72,10 +81,19 @@ export function Viewport({
   const [loading, setLoading] = useState(true);
   const [tool, setTool] = useState<Tool>('window');
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  const [plane, setPlane] = useState<Plane>('axial');
+  const [volume, setVolume] = useState<Volume | undefined>(undefined);
+  const [building, setBuilding] = useState<{ done: number; total: number } | undefined>(undefined);
+  const [refused, setRefused] = useState<string | undefined>(undefined);
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
 
   const slides = useRef(slidesOf(series));
-  const count = slides.current.length;
+  const reformatted = plane !== 'axial' && volume !== undefined;
+  const count = reformatted && volume ? planeDepth(volume, plane) : slides.current.length;
+
+  // A measurement belongs to a plane as well as to an index: slice 31 of the
+  // coronal view is nowhere near slice 31 of the axial one.
+  const key = `${plane}:${at}`;
 
   // Kept in a ref as well as in state: the draw loop reads them without being
   // re-created, and re-creating it on every window drag would rebuild the
@@ -86,7 +104,7 @@ export function Viewport({
   // without being rebuilt every time one is added.
   const measurementsRef = useRef<Measurement[]>([]);
   measurementsRef.current = measurements;
-  const atRef = useRef(0);
+  const keyRef = useRef('axial:0');
   const unit = unitFor(series.modality);
 
   const paint = useCallback(() => {
@@ -111,7 +129,7 @@ export function Viewport({
       if (overlay) {
         drawMeasurements(overlay, {
           measurements: measurementsRef.current,
-          at: atRef.current,
+          at: keyRef.current,
           frame,
           view: viewRef.current,
           ratio: window.devicePixelRatio || 1,
@@ -180,9 +198,111 @@ export function Viewport({
     };
   }, [series.seriesInstanceUid]);
 
+  /**
+   * Builds the solid the reformats are cut out of, the first time one is asked
+   * for.
+   *
+   * Not on opening the series: it means reading every image, which for a four
+   * hundred slice study is two hundred megabytes, and most of the time nobody
+   * asks. Built once and kept, because the second reformat is free.
+   */
+  // Guarded by a ref, not by the progress state. Depending on `building` put
+  // the thing that changes on every progress update into the dependency list:
+  // the effect tore itself down a moment after starting, the result was
+  // discarded as stale, and the volume was never built. The bar sat there for
+  // ever, filling up.
+  const buildingRef = useRef(false);
+
+  useEffect(() => {
+    if (plane === 'axial' || volume || buildingRef.current) {
+      return;
+    }
+
+    const answer = reformattable(slides.current);
+    if (!answer.ok) {
+      // Refusing with a reason, rather than reformatting something that is not
+      // a solid: the picture would look like anatomy and would not be.
+      setRefused(answer.reason);
+      setPlane('axial');
+      return;
+    }
+
+    const source = sourceRef.current;
+    if (!source) {
+      return;
+    }
+
+    let current = true;
+    buildingRef.current = true;
+    setRefused(undefined);
+    setBuilding({ done: 0, total: slides.current.length });
+
+    void source
+      .collect((done, total) => {
+        if (current) {
+          setBuilding({ done, total });
+        }
+      })
+      .then(frames => {
+        if (!current) {
+          return;
+        }
+        const built = buildVolume(answer.shape, frames);
+        buildingRef.current = false;
+        setBuilding(undefined);
+        setVolume(built);
+        // The middle of the new plane, because the middle of a body is where
+        // there is something to see. The ends of a reformat are skin.
+        setAt(Math.floor(planeDepth(built, plane) / 2));
+      })
+      .catch((error: unknown) => {
+        buildingRef.current = false;
+        if (current) {
+          setBuilding(undefined);
+          setRefused(error instanceof Error ? error.message : String(error));
+          setPlane('axial');
+        }
+      });
+
+    return () => {
+      current = false;
+    };
+  }, [plane, volume]);
+
+  // Moving between planes lands in the middle rather than wherever the last
+  // plane happened to be: index 400 of an axial stack is off the end of a
+  // coronal one, and index 3 of either is the edge of the patient.
+  const goToPlane = useCallback(
+    (next: Plane): void => {
+      if (next === plane) {
+        return;
+      }
+      setPlane(next);
+      setPan({ x: 0, y: 0 });
+      setZoom(1);
+      if (next === 'axial') {
+        setAt(Math.floor(slides.current.length / 2));
+      } else if (volume) {
+        setAt(Math.floor(planeDepth(volume, next) / 2));
+      }
+    },
+    [plane, volume]
+  );
+
   const direction = useRef(1);
 
   useEffect(() => {
+    // A reformatted plane is cut out of memory: there is nothing to wait for,
+    // and going through the fetching path would show a spinner for a slice that
+    // is already there.
+    if (reformatted && volume) {
+      frameRef.current = sliceFrom(volume, plane, at);
+      setLoading(false);
+      setFailure(undefined);
+      paint();
+      return;
+    }
+
     const source = sourceRef.current;
     if (!source) {
       return;
@@ -224,9 +344,9 @@ export function Viewport({
     return () => {
       current = false;
     };
-  }, [at, paint]);
+  }, [at, paint, plane, reformatted, volume]);
 
-  atRef.current = at;
+  keyRef.current = key;
 
   /**
    * Redraws after the render that changed something, not during the event that
@@ -270,7 +390,7 @@ export function Viewport({
         End: () => setAt(count - 1),
         Escape: () => (tool === 'window' ? onClose() : setTool('window')),
         Delete: () => {
-          setMeasurements(current => current.filter(m => m.at !== at));
+          setMeasurements(current => current.filter(m => m.at !== key));
         },
       };
       const action = keys[event.key];
@@ -317,7 +437,7 @@ export function Viewport({
       drawingId.current = id;
       setMeasurements(current => [
         ...current,
-        { kind: tool === 'length' ? 'length' : 'region', id, at, from: point, to: point },
+        { kind: tool === 'length' ? 'length' : 'region', id, at: key, from: point, to: point },
       ]);
       return;
     }
@@ -393,8 +513,8 @@ export function Viewport({
     setPan({ x: 0, y: 0 });
   };
 
-  const slide = slides.current[at];
-  const onThisImage = measurements.filter(m => m.at === at);
+  const slide = reformatted ? slides.current[0] : slides.current[at];
+  const onThisImage = measurements.filter(m => m.at === key);
   const named = presetName(voi);
 
   return (
@@ -407,6 +527,20 @@ export function Viewport({
           {series.description || 'unnamed series'}
           <span className="viewport__series">series {series.seriesNumber ?? '--'}</span>
         </span>
+        <span className="viewport__planes">
+          {PLANES.map(({ plane: which, name }) => (
+            <button
+              type="button"
+              key={which}
+              className={plane === which ? 'chip chip--on' : 'chip'}
+              onClick={() => goToPlane(which)}
+              disabled={building !== undefined}
+            >
+              {name}
+            </button>
+          ))}
+        </span>
+
         <span className="viewport__tools">
           {TOOL_NAMES.map(({ tool: which, name }) => (
             <button
@@ -423,7 +557,7 @@ export function Viewport({
               type="button"
               className="chip"
               onClick={() => {
-                setMeasurements(current => current.filter(m => m.at !== at));
+                setMeasurements(current => current.filter(m => m.at !== key));
               }}
             >
               Clear
@@ -490,16 +624,40 @@ export function Viewport({
             </span>
           ) : null}
         </div>
+        {refused ? (
+          <div className="viewport__refused">
+            <strong>Not reformatted.</strong> {refused}
+          </div>
+        ) : null}
+
         <div className="overlay overlay--bottom-right">
           <span>
-            {at + 1} / {count}
+            {PLANES.find(p => p.plane === plane)?.name} {at + 1} / {count}
           </span>
           <span className="overlay__quiet">
-            {series.orderedByGeometry ? 'ordered by position' : 'ordered by number'}
+            {plane !== 'axial'
+              ? `reformatted at ${volume?.spacing.z ?? 0} mm`
+              : series.orderedByGeometry
+                ? 'ordered by position'
+                : 'ordered by number'}
           </span>
         </div>
 
-        {noGraphics ? (
+        {building ? (
+          <div className="viewport__notice">
+            <h2>Reading the whole series</h2>
+            <p>
+              {building.done} of {building.total} images. A reformat is cut out of the stack as a
+              solid, so all of it has to be here before any of it can be shown.
+            </p>
+            <div className="reading__bar">
+              <div
+                className="reading__fill"
+                style={{ width: `${Math.round((building.done / Math.max(1, building.total)) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ) : noGraphics ? (
           <div className="viewport__notice">
             <h2>This machine has no usable graphics context</h2>
             <p>

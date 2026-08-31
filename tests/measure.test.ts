@@ -50,7 +50,7 @@ function frame(fill: (x: number, y: number) => number, partial: Partial<Frame> =
 const region = (from: { x: number; y: number }, to: { x: number; y: number }): Region => ({
   kind: 'region',
   id: 'r',
-  at: 0,
+  at: 'axial:0',
   from,
   to,
 });
@@ -58,7 +58,7 @@ const region = (from: { x: number; y: number }, to: { x: number; y: number }): R
 const length = (from: { x: number; y: number }, to: { x: number; y: number }): Length => ({
   kind: 'length',
   id: 'l',
-  at: 0,
+  at: 'axial:0',
   from,
   to,
 });

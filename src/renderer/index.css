@@ -812,3 +812,37 @@ body {
   padding-left: 18px;
   border-left: 1px solid var(--line);
 }
+
+/* ---- planes -------------------------------------------------------------- */
+
+.viewport__planes {
+  display: flex;
+  gap: 6px;
+}
+
+/* Not an error: this series is not a solid, and saying which one it is not
+   belongs next to the image rather than in a dialogue nobody reads. */
+.viewport__refused {
+  position: absolute;
+  left: 50%;
+  bottom: 42px;
+  transform: translateX(-50%);
+  max-width: 60ch;
+  padding: 6px 12px;
+  border: 1px solid var(--live-dim);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.75);
+  color: var(--ink-dim);
+  font-size: 11px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.viewport__refused strong {
+  color: var(--live);
+  font-weight: 600;
+}
+
+.viewport__notice .reading__bar {
+  margin-top: 4px;
+}

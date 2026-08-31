@@ -17,8 +17,15 @@ import { distanceInMillimetres, type ImageSize, type Point } from './transform';
 export interface Length {
   kind: 'length';
   id: string;
-  /** Which image of the stack it was drawn on. */
-  at: number;
+  /**
+   * Which image it was drawn on: the plane and the index within it.
+   *
+   * Not the index alone. A reformat has its own numbering, and slice 31 of the
+   * coronal view is nowhere near slice 31 of the axial one — a measurement
+   * drawn on one would reappear on the other, over different anatomy, saying a
+   * length that was never measured there.
+   */
+  at: string;
   from: Point;
   to: Point;
 }
@@ -26,7 +33,7 @@ export interface Length {
 export interface Region {
   kind: 'region';
   id: string;
-  at: number;
+  at: string;
   /** Two opposite corners of the box the ellipse is inscribed in. */
   from: Point;
   to: Point;

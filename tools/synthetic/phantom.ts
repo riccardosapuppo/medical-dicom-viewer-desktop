@@ -77,6 +77,21 @@ export function axialSlice({ rows, columns, spacing, z, halfDepth }: SliceShape)
           value = BONE;
         }
 
+        // A vertebral column: dense, posterior, and running the whole length of
+        // the stack.
+        //
+        // It is here to make the phantom asymmetric, which matters more than it
+        // sounds. Without it a cylinder with a sphere in it looks the same cut
+        // coronally and cut sagittally, and a reformat along the wrong axis
+        // produces an identical picture — so nothing could tell the two apart,
+        // neither a person nor a test.
+        const spine = Math.hypot(dx, dy - bodyRadius * 0.55);
+        if (spine < bodyRadius * 0.14) {
+          value = BONE;
+        } else if (spine < bodyRadius * 0.2) {
+          value = SOFT_TISSUE + 20;
+        }
+
         // The sphere in the middle: water, so it stands out from soft tissue
         // at any sensible window.
         if (sphereRadius > 0 && fromCentre <= sphereRadius) {

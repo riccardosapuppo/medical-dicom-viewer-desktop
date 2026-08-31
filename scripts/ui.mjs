@@ -133,6 +133,43 @@ try {
 
   const sample = () => settled(sampleOnce, (a, b) => a.signature === b.signature);
 
+  /**
+   * The box the drawn anatomy occupies, in canvas pixels.
+   *
+   * A reformat with the wrong spacing is a picture of the right thing at the
+   * wrong shape, and the shape is the only thing that shows it. Judging that by
+   * eye does not work: a stack 64 mm deep and 350 mm wide is meant to come out
+   * as a long flat strip, and a long flat strip is exactly what a mistake looks
+   * like too.
+   */
+  const litBox = () =>
+    page.evaluate(() => {
+      const canvas = document.querySelector('.viewport__canvas');
+      const gl = canvas.getContext('webgl2');
+      const width = canvas.width;
+      const height = canvas.height;
+      const pixels = new Uint8Array(width * height * 4);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+      let left = width;
+      let right = -1;
+      let top = height;
+      let bottom = -1;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (pixels[(y * width + x) * 4] > 40) {
+            if (x < left) left = x;
+            if (x > right) right = x;
+            if (y < top) top = y;
+            if (y > bottom) bottom = y;
+          }
+        }
+      }
+
+      return { width: right - left + 1, height: bottom - top + 1 };
+    });
+
   const sampleOnce = () =>
     page.evaluate(() => {
       const canvas = document.querySelector('.viewport__canvas');
@@ -199,7 +236,7 @@ try {
   const after = await sample();
   const position = await page.locator('.overlay--bottom-right span').first().innerText();
 
-  check('the wheel moved through the stack', position.trim().startsWith('9'), position.trim());
+  check('the wheel moved through the stack', position.trim() === 'Axial 9 / 64', position.trim());
   // A stack that draws the same slice at every position is the failure that
   // looks most like success, and the only thing that catches it is comparing
   // the pixels themselves.
@@ -296,7 +333,81 @@ try {
     timeout: 20000,
   });
   const byKeyboard = (await page.locator('.overlay--bottom-right span').first().innerText()).trim();
-  check('the keyboard moves through the stack', byKeyboard.startsWith('31'), byKeyboard);
+  check('the keyboard moves through the stack', byKeyboard.startsWith('Axial 31'), byKeyboard);
+
+  // Reformatting: the coronal view is cut out of the stack rather than read
+  // off the disk, so this is the check that the solid was built the right way
+  // up and the right shape. A reformat that is subtly wrong looks exactly like
+  // anatomy, which is why it gets read back rather than looked at.
+  await page.getByRole('button', { name: 'Coronal' }).click();
+  await page.waitForFunction(() => !document.querySelector('.viewport__notice'), undefined, {
+    timeout: 120000,
+  });
+
+  const coronal = await sample();
+  const shown = (await page.locator('.overlay--bottom-right span').first().innerText()).trim();
+
+  check('a coronal reformat was built', shown.startsWith('Coronal'), shown);
+  check(
+    'the reformat is a picture, not an empty frame',
+    coronal.lit > coronal.pixels * 0.02 && coronal.max - coronal.min > 60,
+    `${Math.round((coronal.lit / coronal.pixels) * 100)}% lit, ${coronal.min} to ${coronal.max}`
+  );
+  check('and it is not the axial image over again', coronal.signature !== windowed.signature);
+
+  // The stack is 64 images deep and 256 across, so the coronal plane has 256
+  // cuts through it, not 64. Getting that wrong is how a reformat ends up
+  // scrolling through the wrong axis.
+  check('the coronal plane is as deep as the image is tall', shown.endsWith('/ 256'), shown);
+
+  // The demo stack is 64 slices a millimetre apart, of images 350 mm across at
+  // 1.367 mm a pixel. The body fills about 215 of the 256 columns, so the
+  // anatomy should come out roughly 294 mm by 64 mm: four and a half times
+  // wider than it is tall. Drawn as though the slices were as far apart as the
+  // pixels are wide, it would come out at three and a third, which looks
+  // perfectly plausible on screen.
+  const anatomy = await litBox();
+  const shape = anatomy.width / anatomy.height;
+
+  check(
+    'the reformat is drawn at the shape the geometry says',
+    Math.abs(shape - 4.59) < 0.45,
+    `${anatomy.width} by ${anatomy.height} is ${shape.toFixed(2)} to one, expected about 4.59`
+  );
+
+  await page.screenshot({ path: path.join(root, 'docs', 'reformat.png') });
+
+  await page.getByRole('button', { name: 'Sagittal' }).click();
+  await page.waitForFunction(() => !document.querySelector('.viewport__notice'), undefined, {
+    timeout: 60000,
+  });
+  const sagittal = await sample();
+  check('a sagittal reformat is different again', sagittal.signature !== coronal.signature);
+
+  // A scout view is two projections at the same place: not a solid, and
+  // refusing it with a reason is the point.
+  await page.getByRole('button', { name: 'Back to the list' }).click();
+  await page.waitForSelector('.patient', { timeout: 20000 });
+  await page.locator('.series').first().locator('.series__open').click();
+  await page.waitForSelector('.viewport__canvas', { timeout: 20000 });
+  await page.getByRole('button', { name: 'Coronal' }).click();
+  await page.waitForSelector('.viewport__refused', { timeout: 20000 });
+  const refusal = await page.locator('.viewport__refused').innerText();
+
+  check(
+    'a series that is not a solid is refused with a reason',
+    /not a stack|same position|not evenly spaced|where they sit/.test(refusal),
+    refusal.replace(/s+/g, ' ').slice(0, 80)
+  );
+
+  // Back to the series everything else was measured on.
+  await page.getByRole('button', { name: 'Back to the list' }).click();
+  await page.waitForSelector('.patient', { timeout: 20000 });
+  await page.locator('.series').nth(biggest).locator('.series__open').click();
+  await page.waitForSelector('.viewport__canvas', { timeout: 20000 });
+  await page.waitForFunction(() => !document.querySelector('.viewport__loading'), undefined, {
+    timeout: 30000,
+  });
 
   await page.getByRole('button', { name: 'Soft tissue' }).click();
 

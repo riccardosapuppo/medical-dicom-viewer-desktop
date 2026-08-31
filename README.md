@@ -10,8 +10,8 @@ an independent reimplementation, written from scratch with synthetic data.
 ## Where it is
 
 A folder of studies opens, reads into a worklist, a series opens onto an image
-you can scroll, window, zoom and pan, and a series can be sent to a screen of
-its own — where the desk remembers it.
+you can scroll, window, zoom, pan and measure, reformat into the coronal and
+sagittal planes, and send to a screen of its own — where the desk remembers it.
 
 ```
 npm install
@@ -66,6 +66,37 @@ monitor left of the primary and therefore at negative coordinates, a portrait
 pair, a taskbar down one side — is covered by tests against invented desks.
 Inventing one is the only way to test a desk nobody owns, and it is not the
 same as owning it.
+
+## Reformatting
+
+A CT is acquired one axial slice at a time and stored that way, but a body is
+read along as well as across. **Coronal** and **sagittal** are not stored
+anywhere: they are cut out of the stack, treating it as the solid it came from.
+
+![A coronal reformat](docs/reformat.png)
+
+Which is only legitimate when the stack really is a solid, and plenty of series
+are not. A scout view is two projections at the same place. A localiser is
+three orthogonal images in one series. A study reconstructed in two blocks has
+a gap in the middle. Reformatting any of them produces a picture that looks
+like anatomy and is not — which is worse than refusing — so most of that module
+is about refusing, with the reason shown under the image: not evenly spaced,
+not all the same size, no position in the patient, too large to hold in memory.
+
+The spacing between slices comes from the geometry, not from `SliceThickness`.
+A study can be reconstructed one millimetre thick every five millimetres, and
+the two numbers mean different things; using the wrong one shows a body the
+wrong length. The reformatted planes then have rectangular pixels — the demo
+stack is 1.37 mm across and 1 mm along — and the interface check measures the
+shape the anatomy is drawn at rather than looking at it, because a reformat
+drawn at the wrong spacing is a picture of the right thing at the wrong shape,
+and it looks entirely plausible.
+
+The volume is built the first time a reformat is asked for, not when the series
+opens: it means reading every image, and most of the time nobody asks. The
+stack is walked from the top down so the most superior slice ends up at the top
+of the picture, and each cut carries the sign and the rescale of the values,
+so a coronal region still measures in Hounsfield units.
 
 ## Measuring
 
@@ -336,8 +367,11 @@ one inclusion to find.
 - Only uncompressed pixel data is drawn. A compressed series is listed, its
   rows in the worklist cannot be opened, and asking for a frame comes back as
   415 naming the transfer syntax that was found.
-- One image per window. No side-by-side layouts inside a window, no linked
-  scrolling between windows, and no reformatting: no MPR, no volume rendering.
+- One image per window. No side-by-side layouts inside a window, and no linked
+  scrolling between windows.
+- Reformatting is orthogonal only: coronal and sagittal, cut at whole voxels.
+  No oblique planes, no slab thickness, no interpolation between slices, and no
+  volume rendering.
 - Measurements live for as long as the window does. They are not saved with the
   study, not exported, and cannot be moved or removed one at a time — the whole
   set on an image is cleared at once.

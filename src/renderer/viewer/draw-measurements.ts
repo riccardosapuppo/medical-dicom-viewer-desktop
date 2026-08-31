@@ -47,8 +47,8 @@ function label(
 
 export interface DrawOptions {
   measurements: Measurement[];
-  /** Which image of the stack is on screen: only its measurements are drawn. */
-  at: number;
+  /** Which image is on screen — plane and index — so only its measurements are drawn. */
+  at: string;
   frame: Frame;
   view: ViewTransform;
   /** Device pixels per CSS pixel, so lines and text keep their apparent size. */
