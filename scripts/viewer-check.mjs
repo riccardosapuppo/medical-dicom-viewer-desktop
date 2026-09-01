@@ -223,7 +223,14 @@ try {
   // nothing. The folder is still open and the archive is still serving it, so
   // the worklist has to come back showing it — it used to come back to the
   // opening screen, which looks like the study you were reading was lost.
-  await page.evaluate(() => window.workstation.leaveViewer());
+  // Not awaited inside the page: the call navigates the window, which destroys
+  // the context the promise is waiting in. What is being checked is what comes
+  // back, not what this call returns.
+  await page
+    .evaluate(() => {
+      void window.workstation.leaveViewer();
+    })
+    .catch(() => {});
   await page.waitForURL(url => url.protocol !== 'viewer:', { timeout: 60000 }).catch(() => {});
 
   const listed = await page
