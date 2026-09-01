@@ -28,6 +28,7 @@ npm run index -- ./demo-data   # the same reading, in the terminal, no window
 npm run displays           # what screens are attached, and this desk's fingerprint
 npm test
 npm run check:viewer       # drives the application until the viewer has drawn a study
+npm run check:folder -- "D:studies"   # can this application read that folder, and if not why
 npm run mutations          # breaks the code on purpose, checks the tests notice
 npm run package            # an installer for the system you are on
 npm run check:packaged     # the same check, against the packaged build
@@ -272,7 +273,7 @@ enumeration order deliberately thrown away first.
 
 ## Checking that it works
 
-`npm test` runs 155 tests. `npm run mutations` breaks the code on purpose in 48
+`npm test` runs 162 tests. `npm run mutations` breaks the code on purpose in 49
 places and checks the tests notice; none of them survive. The harness refuses to
 start against a suite that is already failing, and a mutation that will not
 compile is reported as broken rather than counted as caught — a check that cannot
@@ -292,6 +293,20 @@ The menu has only what this application does. No Edit, because copy and
 select-all on a list of studies do nothing and the entry existed because Electron
 makes one by itself; no page zoom, because the viewer has a tool by that name
 that scales the image rather than the interface.
+
+`npm run check:folder` is the one that was missing, and it was missing for the
+whole time it mattered. Point it at any folder and it indexes it exactly as the
+application does, then asks the archive for the first frame of every series
+through exactly the code that serves the viewer — and prints either the image or
+the reason there is not one, beside the transfer syntax that produced it.
+
+It exists because of a specific failure. Every check before it drove the same
+five studies, from one public archive, all of them stored uncompressed, and they
+all passed while a real folder from a real scanner opened onto "these images
+could not be read". The application had been checked against the data it was
+built with, which is not a check. Compressed pixel data is fragments of
+unpredictable length, and the table that says where each frame begins is allowed
+to be empty — which most equipment leaves it.
 
 `npm run check:viewer` is the one that could not be written any other way. It
 opens the application on a folder, waits for the worklist, clicks a series, and
@@ -396,6 +411,11 @@ that de-identified it, and it lands in a folder that is not committed.
   the only way to test it without owning it. None of it has met real hardware.
 - Explicit and implicit VR little endian are read by the index, and both are
   covered by tests. Big endian is not handled.
+- Compressed pixel data is passed to the viewer as it is stored, with the media
+  type that says what it is, and the viewer decodes it. Four ways of finding a
+  frame are tried; where a file has several frames, no offset table, a fragment
+  count that does not match, and a compression whose frames carry no marker,
+  there is no way to know where one ends — and it says so rather than guessing.
 - Files without the 128-byte preamble and `DICM` marker are treated as not DICOM.
   Raw datasets written without a Part 10 wrapper are skipped.
 - `physical` is `bounds x scaleFactor` — the panel's real pixel count as the
