@@ -255,7 +255,7 @@ enumeration order deliberately thrown away first.
 
 ## Checking that it works
 
-`npm test` runs 147 tests. `npm run mutations` breaks the code on purpose in 48
+`npm test` runs 154 tests. `npm run mutations` breaks the code on purpose in 48
 places and checks the tests notice; none of them survive. The harness refuses to
 start against a suite that is already failing, and a mutation that will not
 compile is reported as broken rather than counted as caught — a check that cannot

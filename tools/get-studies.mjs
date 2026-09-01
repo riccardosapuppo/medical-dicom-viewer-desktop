@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { tidy } from './demo-folder.mjs';
 import { unzip } from './lib/zip.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -113,52 +114,6 @@ async function fetchSeries(series, collection) {
   return images.length;
 }
 
-/**
- * Removes anything in the folder that is not one of these studies.
- *
- * The folder is what the application opens, and the indexer reports everything
- * it finds there as one library. So a folder that also holds an older set —
- * synthetic studies from a previous version, a half-finished download, a series
- * dropped from the manifest — shows a patient who is not part of the
- * demonstration, sitting beside the ones that are. That is exactly what
- * happened, and what it looked like was a viewer with a drawn phantom in it.
- *
- * Removing rather than warning: this folder belongs to this script, it is not
- * committed, and everything in it can be fetched again.
- */
-function tidy() {
-  const wanted = new Map();
-  for (const study of manifest.studies) {
-    if (!wanted.has(study.collection)) {
-      wanted.set(study.collection, new Set(['LICENSE']));
-    }
-    for (const series of study.series) {
-      wanted.get(study.collection).add(series.seriesInstanceUID);
-    }
-  }
-
-  const removed = [];
-
-  for (const entry of fs.readdirSync(outputRoot, { withFileTypes: true })) {
-    const full = path.join(outputRoot, entry.name);
-
-    if (!entry.isDirectory() || !wanted.has(entry.name)) {
-      fs.rmSync(full, { recursive: true, force: true });
-      removed.push(entry.name);
-      continue;
-    }
-
-    for (const inside of fs.readdirSync(full, { withFileTypes: true })) {
-      if (!wanted.get(entry.name).has(inside.name)) {
-        fs.rmSync(path.join(full, inside.name), { recursive: true, force: true });
-        removed.push(`${entry.name}/${inside.name}`);
-      }
-    }
-  }
-
-  return removed;
-}
-
 async function main() {
   console.log('Downloading from', manifest.source.archive);
   for (const [name, collection] of Object.entries(manifest.collections)) {
@@ -170,6 +125,18 @@ async function main() {
     console.log(`\n${study.label} (${study.collection})`);
     for (const series of study.series) {
       total += await fetchSeries(series, study.collection);
+    }
+  }
+
+  const removed = tidy(outputRoot, manifest.studies);
+  if (removed.length > 0) {
+    const things = removed.length === 1 ? 'thing' : 'things';
+    console.log(`\nRemoved ${removed.length} ${things} not part of these studies:`);
+    for (const name of removed.slice(0, 10)) {
+      console.log(`  - ${name}`);
+    }
+    if (removed.length > 10) {
+      console.log(`  ... and ${removed.length - 10} more`);
     }
   }
 
