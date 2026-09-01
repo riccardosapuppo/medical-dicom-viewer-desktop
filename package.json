@@ -16,7 +16,6 @@
     "demo-data": "node tools/get-studies.mjs",
     "build": "node tools/build-app.mjs",
     "start": "npm run build && electron .",
-    "check:ui": "npm run build && node scripts/ui.mjs",
     "icon": "node tools/make-icon.mjs",
     "package": "npm run build && electron-builder --publish never",
     "package:dir": "npm run build && electron-builder --dir --publish never",

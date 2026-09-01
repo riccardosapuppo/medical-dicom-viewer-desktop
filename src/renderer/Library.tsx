@@ -9,15 +9,27 @@
 import React, { useState } from 'react';
 
 import type { Patient, Series, Study } from '../main/dicom/build-index';
-import { undrawable } from '../main/dicom/drawable';
 import type { UnreadableFile } from '../main/dicom/read-header';
 
 import { age, patientKey, readableDate, readableTime } from './format';
 
+import type { LibraryReading } from './useLibrary';
+
 /** Both path separators, so a file name is the last segment on either system. */
 const SEPARATORS = new RegExp('[' + String.fromCharCode(92, 92) + '/]');
-import type { Opened } from './viewer/Viewport';
-import type { LibraryReading } from './useLibrary';
+
+/**
+ * What was picked out of the worklist.
+ *
+ * Enough to address the viewer, which wants the study and then the series to
+ * land on. It used to be the argument to a viewport rendered inside this
+ * window; now it is what an address is built from.
+ */
+export interface Opened {
+  patient: Patient;
+  study: Study;
+  series: Series;
+}
 
 function SeriesRow({
   series,
@@ -31,14 +43,11 @@ function SeriesRow({
 }): React.ReactElement {
   const first = series.instances[0];
 
-  // A series with nothing that can be drawn is listed but not opened: a
-  // viewport that opens onto an error is worse than a row that does not respond
-  // to a click. What it is NOT is silent — the reason goes on the row, where a
-  // hospital CD full of JPEG 2000 would otherwise produce a worklist that is
-  // entirely greyed out and says nothing.
-  const refusals = series.instances.map(instance => undrawable(instance.pixels));
-  const openable = refusals.some(refusal => refusal === undefined);
-  const refusal = openable ? undefined : refusals.find(Boolean);
+  // Every series is openable. This used to refuse compressed pixels, colour
+  // images and palettes, because the renderer that drew them here could not
+  // read any of those. The viewer can: it carries decoders for JPEG, JPEG-LS,
+  // JPEG 2000 and RLE. A hospital CD full of JPEG 2000 used to produce a
+  // worklist that was entirely greyed out; it now opens.
 
   return (
     <li className="series">
@@ -46,8 +55,7 @@ function SeriesRow({
         type="button"
         className="series__open"
         onClick={onOpen}
-        disabled={!openable}
-        title={openable ? 'Open this series' : `Not opened: ${refusal?.reason ?? 'nothing to draw'}`}
+        title="Open this series"
       >
       <span className="series__number">{series.seriesNumber ?? '--'}</span>
       <span className="series__name">{series.description || 'unnamed series'}</span>
@@ -60,14 +68,10 @@ function SeriesRow({
           can be known is here. */}
       <span
         className={
-          refusal
-            ? 'series__order series__order--weak'
-            : series.orderedByGeometry
-              ? 'series__order'
-              : 'series__order series__order--weak'
+          series.orderedByGeometry ? 'series__order' : 'series__order series__order--weak'
         }
       >
-        {refusal ? refusal.reason : series.orderedByGeometry ? 'by position' : 'by number'}
+        {series.orderedByGeometry ? 'by position' : 'by number'}
       </span>
       </button>
 
@@ -80,7 +84,6 @@ function SeriesRow({
             type="button"
             key={pane}
             className="screen"
-            disabled={!openable}
             title={`Open this series in its own window on screen ${pane + 1}`}
             onClick={() => void window.workstation.openOnScreen(series.seriesInstanceUid, pane)}
           >

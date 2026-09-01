@@ -19,9 +19,7 @@ import { BrowserWindow } from 'electron';
 import type { Pane } from '../display-topology';
 
 import { boundsForPane } from './panes';
-
-/** Where the built renderer lives, relative to the compiled main process. */
-const RENDERER = path.join(__dirname, 'renderer', 'index.html');
+import { VIEWER_SCHEME } from '../viewer';
 
 export interface Placed {
   seriesInstanceUid: string;
@@ -45,8 +43,12 @@ export class ReadingWindows {
 
   /**
    * Opens a series on a pane, or moves the window that is already showing it.
+   *
+   * The study is needed as well as the series: the viewer is addressed by study
+   * and then told which series to land on, so a window opened with the series
+   * alone would come up on whatever the study happens to show first.
    */
-  open(seriesInstanceUid: string, pane: number, panes: Pane[]): void {
+  open(seriesInstanceUid: string, studyInstanceUid: string, pane: number, panes: Pane[]): void {
     const glass = panes[pane];
     if (!glass) {
       // Asked for a screen that is not there. Doing nothing is right: the
@@ -85,7 +87,12 @@ export class ReadingWindows {
     // The window is told what it is showing through the address, so it needs
     // nothing from the main process before it can start: the alternative is a
     // message that may arrive before or after the page is ready.
-    void window.loadFile(RENDERER, { hash: `reading/${encodeURIComponent(seriesInstanceUid)}` });
+    const address =
+      `${VIEWER_SCHEME}://app/viewer` +
+      `?StudyInstanceUIDs=${encodeURIComponent(studyInstanceUid)}` +
+      `&initialSeriesInstanceUID=${encodeURIComponent(seriesInstanceUid)}`;
+
+    void window.loadURL(address);
 
     this.#windows.set(seriesInstanceUid, { window, pane });
   }

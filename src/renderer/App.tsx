@@ -16,13 +16,29 @@ import { Start } from './Start';
 import { tailOfPath } from './format';
 import { Library } from './Library';
 import { useLibrary } from './useLibrary';
-import { Viewport, type Opened } from './viewer/Viewport';
+import type { Opened } from './Library';
 
 export function App(): React.ReactElement {
   const [desk, setDesk] = useState<Desk | undefined>(undefined);
   const [changedAt, setChangedAt] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [opened, setOpened] = useState<Opened | undefined>(undefined);
+
+  /**
+   * Opening a series hands the window to the viewer.
+   *
+   * The address carries the study and the series, so the viewer needs nothing
+   * from this page: no message that might arrive before it is ready, and no
+   * state to keep in step. What is remembered here is only what the title bar
+   * says while the change is happening.
+   */
+  const open = (chosen: Opened): void => {
+    setOpened(chosen);
+    void window.workstation.openInViewer(
+      chosen.study.studyInstanceUid,
+      chosen.series.seriesInstanceUid
+    );
+  };
   const [restored, setRestored] = useState<string | undefined>(undefined);
   const [showScreens, setShowScreens] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
@@ -131,21 +147,17 @@ export function App(): React.ReactElement {
         </div>
       </header>
 
-      {opened ? (
-        <Viewport opened={opened} onClose={() => setOpened(undefined)} />
-      ) : (
-        <Body
+      <Body
           desk={desk}
-          deskKey={changedAt}
-          library={library}
-          onOpen={setOpened}
-          screens={desk?.panes.length ?? 1}
-          showScreens={showScreens}
-          onLeaveScreens={() => setShowScreens(false)}
-          recent={recent}
-          dragging={dragging}
-        />
-      )}
+        deskKey={changedAt}
+        library={library}
+        onOpen={open}
+        screens={desk?.panes.length ?? 1}
+        showScreens={showScreens}
+        onLeaveScreens={() => setShowScreens(false)}
+        recent={recent}
+        dragging={dragging}
+      />
 
       <footer className="status">
         <span className="status__key">desk</span>

@@ -94,29 +94,35 @@ try {
 
   watch(page);
 
-  // The opening screen hands over to the viewer once the folder has been read.
-  await page.waitForURL(url => url.protocol === 'viewer:', { timeout: 120000 }).catch(() => {});
+  // The worklist is the way in: the folder is read, its series are listed, and
+  // opening one hands the window to the viewer. Driving it this way exercises
+  // the path a person takes rather than a shortcut written for the check.
+  await page.waitForSelector('.series__open', { timeout: 120000 });
+  check('the folder was read into a worklist', true);
 
+  await page.click('.series__open');
+
+  await page.waitForURL(url => url.protocol === 'viewer:', { timeout: 120000 }).catch(() => {});
   page = context.pages().find(one => one.url().startsWith('viewer:')) ?? page;
   watch(page);
 
-  check('the window is showing the viewer', page.url().startsWith('viewer:'), page.url());
+  check('opening a series hands the window to the viewer', page.url().startsWith('viewer:'), page.url());
 
-  // The viewer's own study list, filled from the archive this process serves.
-  const listed = await page
+  // The viewport, drawn by the viewer from what the archive served it.
+  const drew = await page
     .waitForFunction(
       () => {
-        const rows = document.querySelectorAll('tr[data-cy="studyRow"], tr.cursor-pointer');
-        return rows.length > 0 ? rows.length : false;
+        const canvas = document.querySelector('canvas');
+        return canvas instanceof HTMLCanvasElement && canvas.width > 0 ? canvas.width : false;
       },
-      { timeout: 120000 }
+      { timeout: 180000 }
     )
     .then(handle => handle.jsonValue())
     .catch(() => 0);
 
-  check('the study list filled from the archive', listed > 0, `${listed} studies`);
+  check('the viewer drew the study', drew > 0, `${drew}px wide`);
 
-  const queried = asked.filter(url => url.includes('/dicom-web/studies'));
+  const queried = asked.filter(url => url.includes('/dicom-web/'));
   check('the viewer queried the archive', queried.length > 0, `${queried.length} requests`);
 
   const outward = asked.filter(
@@ -127,14 +133,8 @@ try {
   const real = complaints.filter(text => !/favicon|service ?worker|Manifest/i.test(text));
   check('the page reported nothing broken', real.length === 0, real.slice(0, 3).join(' | '));
 
-  if (listed > 0) {
-    // Opening one is where the frames endpoint is exercised for the first time.
-    await page.click('tr[data-cy="studyRow"], tr.cursor-pointer').catch(() => {});
-    await page.waitForTimeout(3000);
-
-    const frames = asked.filter(url => url.includes('/frames/'));
-    check('the viewer asked the archive for pixels', frames.length > 0, `${frames.length} frames`);
-  }
+  const frames = asked.filter(url => url.includes('/frames/'));
+  check('the viewer asked the archive for pixels', frames.length > 0, `${frames.length} frames`);
 } finally {
   await browser.close().catch(() => {});
   child.kill();

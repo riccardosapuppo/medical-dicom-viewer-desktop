@@ -27,7 +27,6 @@ import {
 import { describe, readDesk, type Desk } from './display-topology';
 import { Indexer } from './library/indexer-host';
 import { buildMenu, guardShortcuts } from './menu';
-import { PixelServer, SCHEME } from './library/pixel-server';
 import { ReadingWindows } from './layout/reading-windows';
 import { startArchive, type Archive } from './dicomweb/server';
 import { serveViewer, viewerPresent, VIEWER_PRIVILEGES, VIEWER_URL } from './viewer';
@@ -161,13 +160,7 @@ function createWindow(): BrowserWindow {
 // nothing about why. Standard so that URLs parse into host and path; secure so
 // a page served from file: may fetch it; stream so a frame arrives as it is
 // read rather than after it is all in memory.
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: SCHEME,
-    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
-  },
-  VIEWER_PRIVILEGES,
-]);
+protocol.registerSchemesAsPrivileged([VIEWER_PRIVILEGES]);
 
 // A second launch is a study being opened, not a second application.
 if (!app.requestSingleInstanceLock()) {
@@ -219,13 +212,13 @@ if (!app.requestSingleInstanceLock()) {
      * connected to anything, and the promise it makes is that opening one does
      * not tell anybody. A promise kept by nobody happening to add a request is
      * not a promise, so requests off the machine are refused outright: what is
-     * left is the viewer's own scheme, the pixels, and the archive on loopback.
+     * left is the viewer's own scheme and the archive on loopback.
      *
      * It is also what makes the refusal visible. A reference left pointing at a
      * public network fails here, during a check, instead of silently working on
      * a developer's machine and failing in a reading room.
      */
-    const CARRIED = ['viewer:', 'dicom:', 'file:', 'data:', 'blob:', 'devtools:'];
+    const CARRIED = ['viewer:', 'file:', 'data:', 'blob:', 'devtools:'];
 
     session.defaultSession.webRequest.onBeforeRequest((details, decide) => {
       const address = details.url;
@@ -239,7 +232,6 @@ if (!app.requestSingleInstanceLock()) {
     // Reading a folder happens in a process of its own; everything the window
     // hears about it comes through here.
     const indexer = new Indexer();
-    const pixels = new PixelServer();
     const reading = new ReadingWindows();
 
     /**
@@ -263,6 +255,33 @@ if (!app.requestSingleInstanceLock()) {
     // window going blank on someone who has not built the viewer yet.
     ipcMain.handle('viewer:present', () => viewerPresent(VIEWER));
 
+    /**
+     * Hands this window over to the viewer, at a study.
+     *
+     * The address carries both names, so the viewer needs nothing else: the
+     * study to open and the series to land on. Sent as a message instead, it
+     * would arrive either before the page was ready or after it had already
+     * chosen what to show.
+     */
+    ipcMain.handle('viewer:open', (_event, study: unknown, series: unknown) => {
+      if (typeof study !== 'string' || !mainWindow) {
+        return;
+      }
+
+      const address =
+        `${VIEWER_URL}viewer?StudyInstanceUIDs=${encodeURIComponent(study)}` +
+        (typeof series === 'string'
+          ? `&initialSeriesInstanceUID=${encodeURIComponent(series)}`
+          : '');
+
+      void mainWindow.loadURL(address);
+    });
+
+    /** Back to the worklist: the folder is still open, the reading is done. */
+    ipcMain.handle('viewer:leave', () => {
+      void mainWindow?.loadFile(RENDERER);
+    });
+
     const layoutFile = path.join(app.getPath('userData'), 'layouts.json');
     let layouts: Layouts = load(layoutFile);
 
@@ -275,21 +294,12 @@ if (!app.requestSingleInstanceLock()) {
       // What the page may fetch is exactly what is in the folder it is looking
       // at, and it changes at the same moment the list does.
       if (message.type === 'done') {
-        pixels.remember(message.index);
         archive?.serve(message.index);
         current = message;
         layouts = rememberFolder(layouts, message.folder);
         save(layoutFile, layouts);
         refreshMenu();
-
-        // The folder is read; from here the viewer takes over. It shows what is
-        // in the folder as a study list of its own, so the opening screen has
-        // done its job and steps out of the way.
-        if (archive && mainWindow) {
-          void mainWindow.loadURL(VIEWER_URL);
-        }
       } else if (message.type === 'failed') {
-        pixels.forget();
         archive?.serve({ patients: [], duplicates: 0 });
         current = undefined;
       }
@@ -305,11 +315,38 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('library:current', () => current);
 
+    /**
+     * Which study a series belongs to.
+     *
+     * The viewer is addressed by study and then told which series to land on,
+     * so sending a series to another screen needs both names. Only the index
+     * knows the pairing, and it is here.
+     */
+    const studyOf = (seriesInstanceUid: string): string | undefined => {
+      for (const patient of current?.index.patients ?? []) {
+        for (const study of patient.studies) {
+          if (study.series.some(one => one.seriesInstanceUid === seriesInstanceUid)) {
+            return study.studyInstanceUid;
+          }
+        }
+      }
+      return undefined;
+    };
+
     ipcMain.handle('reading:open', (_event, seriesInstanceUid: unknown, pane: unknown) => {
       if (typeof seriesInstanceUid !== 'string' || typeof pane !== 'number') {
         return;
       }
-      reading.open(seriesInstanceUid, pane, desk.panes);
+
+      const study = studyOf(seriesInstanceUid);
+      if (!study) {
+        // A series that is not in the folder that is open. The window would come
+        // up on an address the archive answers nothing for, which reads as the
+        // application being broken rather than as the series being gone.
+        return;
+      }
+
+      reading.open(seriesInstanceUid, study, pane, desk.panes);
       layouts = remember(layouts, desk.fingerprint, seriesInstanceUid, pane, Date.now());
       save(layoutFile, layouts);
     });
@@ -337,8 +374,12 @@ if (!app.requestSingleInstanceLock()) {
 
       let opened = 0;
       for (const placement of arrangement(layouts, desk.fingerprint, desk.panes.length)) {
-        if (known.has(placement.seriesInstanceUid)) {
-          reading.open(placement.seriesInstanceUid, placement.pane, desk.panes);
+        const study = known.has(placement.seriesInstanceUid)
+          ? studyOf(placement.seriesInstanceUid)
+          : undefined;
+
+        if (study) {
+          reading.open(placement.seriesInstanceUid, study, placement.pane, desk.panes);
           opened++;
         }
       }
@@ -347,7 +388,6 @@ if (!app.requestSingleInstanceLock()) {
 
     app.on('will-quit', () => reading.closeAll());
 
-    protocol.handle(SCHEME, request => pixels.handle(request));
 
     app.on('will-quit', () => indexer.stop());
 

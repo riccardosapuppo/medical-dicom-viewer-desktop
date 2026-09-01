@@ -84,6 +84,13 @@ const api = {
    */
   viewerPresent: (): Promise<boolean> => ipcRenderer.invoke('viewer:present'),
 
+  /** Hands this window to the viewer, at a study and a series within it. */
+  openInViewer: (study: string, series?: string): Promise<void> =>
+    ipcRenderer.invoke('viewer:open', study, series),
+
+  /** Back to the worklist. */
+  leaveViewer: (): Promise<void> => ipcRenderer.invoke('viewer:leave'),
+
   /**
    * Says what this window is showing, for the title bar and the task switcher.
    *
