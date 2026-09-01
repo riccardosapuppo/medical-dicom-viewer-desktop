@@ -21,6 +21,7 @@
 import path from 'node:path';
 
 import { indexFolder } from '../src/main/dicom/index-folder';
+import { givenPath } from './given-path';
 import type { Series, Study } from '../src/main/dicom/build-index';
 import { isProblem, readFrame } from '../src/main/dicomweb/frames';
 import { readInstance } from '../src/main/dicomweb/metadata';
@@ -48,7 +49,8 @@ function named(uid: string): string {
   return SYNTAXES[uid] ? `${SYNTAXES[uid]}` : uid || 'not stated';
 }
 
-const where = process.argv[2] ?? "";
+const asked = givenPath(process.argv[2] ?? '');
+const where = asked.folder;
 
 if (!where) {
   process.stderr.write('Give a folder:  npm run check:folder -- "D:\\\\studies"\n');
@@ -102,7 +104,18 @@ function checkSeries(study: Study, series: Series): boolean {
 }
 
 async function main(): Promise<void> {
-  console.log(`Reading ${path.resolve(where)}\n`);
+  console.log(`Reading ${path.resolve(where)}`);
+
+  if (asked.corrected) {
+    // Said rather than quietly corrected: the same doubling will happen to
+    // every other command given the same folder.
+    console.log(
+      'The caret in that name was doubled on the way through npm and cmd.\n' +
+        'Read as the folder that is actually there.'
+    );
+  }
+
+  console.log('');
 
   const { index, found, read, skipped, unreadable, elapsedMs } = await indexFolder(where);
 

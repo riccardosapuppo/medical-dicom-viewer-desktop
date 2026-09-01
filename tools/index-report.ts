@@ -9,6 +9,7 @@
  *   npm run index -- ./demo-data --json
  */
 import path from 'node:path';
+import { givenPath } from './given-path';
 
 import { indexFolder } from '../src/main/dicom/index-folder';
 
@@ -21,7 +22,10 @@ if (!folder) {
   process.exit(1);
 }
 
-const root = path.resolve(folder);
+// A caret separates the parts of a name in DICOM, so it is in a great many
+// folder names — and a path carrying one arrives doubled when it has come
+// through npm and cmd on Windows.
+const root = path.resolve(givenPath(folder).folder);
 
 /** 20240310 -> 2024-03-10. Leaves anything unexpected alone. */
 function readableDate(raw: string): string {

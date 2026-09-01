@@ -138,6 +138,15 @@ function asFolder(chosen: string): string {
   try {
     return statSync(chosen).isDirectory() ? chosen : path.dirname(chosen);
   } catch {
+    // A caret is what separates the parts of a name in DICOM, so it is in a
+    // great many folder names — and a path carrying one arrives doubled when it
+    // has come through npm and cmd on Windows. Undone only when the folder that
+    // results is really there.
+    const undoubled = chosen.split('^^').join('^');
+    if (undoubled !== chosen && existsSync(undoubled)) {
+      return asFolder(undoubled);
+    }
+
     // Gone, or unreadable. Handed on as it is, so whatever reads it next says
     // what is actually wrong with it.
     return chosen;
