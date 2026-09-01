@@ -208,6 +208,20 @@ try {
     .catch(() => 0);
 
   check('the viewer can move between its own screens', rows > 0, `${rows} studies listed`);
+
+  // Back to the worklist, which loads this application's own page again from
+  // nothing. The folder is still open and the archive is still serving it, so
+  // the worklist has to come back showing it — it used to come back to the
+  // opening screen, which looks like the study you were reading was lost.
+  await page.evaluate(() => window.workstation.leaveViewer());
+  await page.waitForURL(url => url.protocol !== 'viewer:', { timeout: 60000 }).catch(() => {});
+
+  const listed = await page
+    .waitForSelector('.study__head', { timeout: 60000 })
+    .then(() => page.$$eval('.study__head', nodes => nodes.length))
+    .catch(() => 0);
+
+  check('coming back shows the folder that is still open', listed > 0, `${listed} studies`);
 } finally {
   await browser.close().catch(() => {});
   child.kill();

@@ -50,6 +50,34 @@ export function useLibrary(): Library {
   // would swap the list back to the folder the user just left.
   const wanted = useRef<string | undefined>(undefined);
 
+  /**
+   * The folder that is already open, asked for once when this page starts.
+   *
+   * The page is loaded fresh every time the window comes back from the viewer,
+   * and without this it came back to the opening screen — the folder still
+   * open, the archive still serving it, and the worklist showing nothing. What
+   * that looks like is an application that lost the study you were reading.
+   */
+  useEffect(() => {
+    let stillHere = true;
+
+    void window.workstation.currentReading().then(current => {
+      const reading = current as LibraryReading | undefined;
+      if (!stillHere || !reading || wanted.current !== undefined) {
+        // Nothing open, or somebody picked a folder while this was in flight.
+        // The folder they just chose wins over the one that was already there.
+        return;
+      }
+
+      wanted.current = reading.folder;
+      setState({ status: 'ready', reading });
+    });
+
+    return () => {
+      stillHere = false;
+    };
+  }, []);
+
   useEffect(
     () =>
       window.workstation.onLibrary(message => {
