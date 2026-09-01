@@ -146,9 +146,11 @@ export function menuTemplate({
 
     {
       label: '&Window',
+      // Zoom is a macOS role — it is what the green button does there. On
+      // Windows and Linux it is an entry that does nothing when clicked.
       submenu: onMac
         ? [{ role: 'minimize' }, { role: 'zoom' }, { type: 'separator' }, { role: 'front' }]
-        : [{ role: 'minimize' }, { role: 'zoom' }],
+        : [{ role: 'minimize' }],
     },
 
     {

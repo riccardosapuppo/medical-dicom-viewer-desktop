@@ -42,8 +42,26 @@ export function App(): React.ReactElement {
   };
   const [restored, setRestored] = useState<string | undefined>(undefined);
   const [showScreens, setShowScreens] = useState(false);
+  const [viewerBuilt, setViewerBuilt] = useState(true);
+  const [installed, setInstalled] = useState(true);
   const [recent, setRecent] = useState<string[]>([]);
   const library = useLibrary();
+
+  /**
+   * Whether there is a viewer to hand a study to.
+   *
+   * It is fetched and built rather than kept in the repository, so a clone that
+   * has not run `npm run viewer` has an application with no reading surface.
+   * Asked once, because it cannot change while the window is open.
+   *
+   * Assumed present until the answer arrives: the alternative is a warning that
+   * flashes up on every start and then goes away, which trains people to ignore
+   * it.
+   */
+  useEffect(() => {
+    void window.workstation.viewerPresent().then(setViewerBuilt);
+    void window.workstation.installed().then(setInstalled);
+  }, []);
 
   // The screen layout, if a menu asked for it while this page did not exist.
   useEffect(() => {
@@ -126,6 +144,25 @@ export function App(): React.ReactElement {
           </button>
         </div>
       </header>
+
+      {/* Said once, at the top, and it stays: without a viewer this application
+          can list a folder and do nothing else, and finding that out by clicking
+          a study and getting nothing is the worst way to learn it. */}
+      {viewerBuilt ? null : (
+        <p className="notice">
+          {installed ? (
+            // Nothing the person can do: an installed copy has no project
+            // directory to build one in. Saying which build is wrong is the
+            // useful part.
+            <>This copy was packaged without a viewer, so a study cannot be opened.</>
+          ) : (
+            <>
+              There is no viewer in this build, so a study cannot be opened. Run{' '}
+              <code>npm run viewer</code> to fetch and build it, then <code>npm start</code>.
+            </>
+          )}
+        </p>
+      )}
 
       <Body
         desk={desk}

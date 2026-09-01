@@ -238,3 +238,20 @@ test('placements written by the version that keyed them by series are let go', (
   // What is not about placement survives.
   assert.deepEqual(layouts.recent, ['C:/studies']);
 });
+
+test('arranging a window does not throw away the folders opened before', () => {
+  // Both returns from remember() used to build a fresh object holding only the
+  // desks, so the list of recent folders was wiped from the file the next time
+  // it was saved — which is to say, every time a study was sent to a screen.
+  const withFolders = rememberFolder({ desks: {}, recent: [] }, 'C:/studies/april');
+
+  const after = remember(withFolders, DESK, '1.2.3', 1, 1000);
+  assert.deepEqual(after.recent, ['C:/studies/april']);
+
+  // And through the overflow, where the oldest desks are dropped.
+  let many = withFolders;
+  for (let desk = 0; desk < 40; desk++) {
+    many = remember(many, `desk-${desk}`, '1.2.3', 0, desk);
+  }
+  assert.deepEqual(many.recent, ['C:/studies/april']);
+});

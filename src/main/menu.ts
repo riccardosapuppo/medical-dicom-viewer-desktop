@@ -66,8 +66,8 @@ export function titleWindow(window: BrowserWindow, subject?: string): void {
  * Both, because they fail differently: the refusal stops the flicker, and
  * setting it back is what actually holds.
  */
-export function ownTitle(window: BrowserWindow): void {
-  titleWindow(window);
+export function ownTitle(window: BrowserWindow, subject?: string): void {
+  titleWindow(window, subject);
 
   window.webContents.on('page-title-updated', event => {
     event.preventDefault();

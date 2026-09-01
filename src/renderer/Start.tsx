@@ -36,9 +36,15 @@ export function Start({
   // Asked once. The studies are downloaded by a command, not while the window
   // is open, so there is nothing here to keep in step.
   const [hasDemo, setHasDemo] = useState(false);
+  const [installed, setInstalled] = useState(true);
 
   useEffect(() => {
     void window.workstation.sampleFolder().then(folder => setHasDemo(Boolean(folder)));
+
+    // An installed copy has no project directory and no npm, so it must not be
+    // told to run a script. Assumed installed until the answer arrives, because
+    // the wrong way round is an instruction nobody can follow.
+    void window.workstation.installed().then(setInstalled);
   }, []);
 
   return (
@@ -83,6 +89,11 @@ export function Start({
               </button>{' '}
               — chest, abdominal and breast acquisitions from The Cancer Imaging
               Archive, de-identified before publication.
+            </>
+          ) : installed ? (
+            <>
+              No DICOM to hand? Any folder of DICOM files will do — one straight off
+              a disc is fine, and anything in it that is not DICOM is passed over.
             </>
           ) : (
             <>

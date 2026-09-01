@@ -49,7 +49,17 @@ export class ReadingWindows {
    * what to put up first, which is what it is for. Choosing a series before
    * anything has been shown is a question nobody can answer.
    */
-  open(studyInstanceUid: string, pane: number, panes: Pane[], debug = false): void {
+  open(
+    studyInstanceUid: string,
+    pane: number,
+    panes: Pane[],
+    options: {
+      debug?: boolean;
+      icon?: string;
+      /** What the window is showing, for its title. Absent when nothing is known. */
+      subject?: string | undefined;
+    } = {}
+  ): void {
     const glass = panes[pane];
     if (!glass) {
       // Asked for a screen that is not there. Doing nothing is right: the
@@ -72,7 +82,7 @@ export class ReadingWindows {
       ...bounds,
       backgroundColor: '#000000',
       show: false,
-      title: 'DICOM Workstation',
+      ...(options.icon ? { icon: options.icon } : {}),
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
@@ -89,8 +99,18 @@ export class ReadingWindows {
     // is the one somebody is actually reading from, and it was the one where
     // Reload and the developer tools were still reachable — because they were
     // only ever taken away from the window that opens first.
-    guardShortcuts(window, debug);
-    ownTitle(window);
+    guardShortcuts(window, options.debug === true);
+
+    // What this window is showing, so three of them on three screens can be
+    // told apart. They were all called "DICOM Workstation", which is the one
+    // thing a title on a reading monitor must not be.
+    ownTitle(window, options.subject);
+
+    // No menu bar. On Windows and Linux the application menu is drawn on every
+    // window, so a window whose whole purpose is to be an image on a pane of
+    // glass came up with File, View and Help across the top of it — and every
+    // entry acted on the main window, on another screen.
+    window.setMenu(null);
 
     window.webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith('https://')) {
@@ -108,6 +128,22 @@ export class ReadingWindows {
     void window.loadURL(address);
 
     this.#windows.set(studyInstanceUid, { window, pane });
+  }
+
+  /**
+   * Takes the menu bar off every reading window, again.
+   *
+   * `Menu.setApplicationMenu` pushes the menu onto every window that is already
+   * open, and the menu is rebuilt whenever the main window navigates. So doing
+   * this once, when the window is made, is undone the first time somebody opens
+   * a study or goes back to the worklist.
+   */
+  hideMenus(): void {
+    for (const { window } of this.#windows.values()) {
+      if (!window.isDestroyed()) {
+        window.setMenu(null);
+      }
+    }
   }
 
   close(studyInstanceUid: string): void {

@@ -28,9 +28,17 @@ const out = path.join(root, 'dist', 'app');
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const watch = process.argv.includes('--watch');
 
+/**
+ * Source maps while developing, and not in what gets installed.
+ *
+ * A map carries the TypeScript it was built from, and everything in dist/app is
+ * packaged — so an installer built with them shipped this repository's sources
+ * inside it. They are what makes a stack trace readable while working, and
+ * there is nobody reading stack traces on a reading station.
+ */
 const shared = {
   bundle: true,
-  sourcemap: true,
+  sourcemap: watch,
   logLevel: 'warning',
   absWorkingDir: root,
 };
@@ -104,6 +112,36 @@ function copyStatic() {
   }
 
   copyViewer();
+  removeWhatIsNoLongerBuilt();
+}
+
+/**
+ * Removes what an earlier version of this build put here.
+ *
+ * Everything in dist/app is packaged, so anything left behind is shipped. The
+ * drawn sample study was built here until it was replaced by the downloaded
+ * ones, and twenty-four images of it sat in every installer made afterwards —
+ * because a build writes what it writes and never looks at what is already
+ * there.
+ */
+function removeWhatIsNoLongerBuilt() {
+  const produced = new Set(['main.js', 'indexer.js', 'preload.js', 'icon.png', 'renderer', 'viewer']);
+
+  // Maps are written while developing and not otherwise, so a build that is not
+  // watching removes the ones a watching build left — which is what would
+  // otherwise be packaged.
+  if (watch) {
+    for (const name of ['main.js.map', 'indexer.js.map', 'preload.js.map']) {
+      produced.add(name);
+    }
+  }
+
+  for (const entry of fs.readdirSync(out)) {
+    if (!produced.has(entry)) {
+      fs.rmSync(path.join(out, entry), { recursive: true, force: true });
+      console.log(`removed ${entry}: not built any more`);
+    }
+  }
 }
 
 /**

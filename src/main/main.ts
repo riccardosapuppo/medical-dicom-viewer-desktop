@@ -308,6 +308,9 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('viewer:present', () => viewerPresent(VIEWER));
 
+    /** Whether this is an installed copy rather than one run from its source. */
+    ipcMain.handle('app:installed', () => app.isPackaged);
+
     /**
      * What the title bar actually says.
      *
@@ -327,6 +330,13 @@ if (!app.requestSingleInstanceLock()) {
      */
     ipcMain.handle('viewer:open', (_event, study: unknown, series: unknown) => {
       if (typeof study !== 'string' || !mainWindow) {
+        return;
+      }
+
+      if (!viewerPresent(VIEWER)) {
+        // There is nothing to hand the window to. Loading the address anyway
+        // gives Chromium's own error page, inside the application, with no way
+        // back — the page that said what to do is the one being replaced.
         return;
       }
 
@@ -433,7 +443,11 @@ if (!app.requestSingleInstanceLock()) {
         return;
       }
 
-      reading.open(studyInstanceUid, pane, desk.panes, debug);
+      reading.open(studyInstanceUid, pane, desk.panes, {
+        debug,
+        icon: ICON,
+        subject: describeStudy(studyInstanceUid),
+      });
       layouts = remember(layouts, desk.fingerprint, studyInstanceUid, pane, Date.now());
       save(layoutFile, layouts);
     });
@@ -457,7 +471,11 @@ if (!app.requestSingleInstanceLock()) {
 
       for (const placement of arrangement(layouts, desk.fingerprint, desk.panes.length)) {
         if (studyIsOpen(placement.studyInstanceUid)) {
-          reading.open(placement.studyInstanceUid, placement.pane, desk.panes, debug);
+          reading.open(placement.studyInstanceUid, placement.pane, desk.panes, {
+            debug,
+            icon: ICON,
+            subject: describeStudy(placement.studyInstanceUid),
+          });
           opened++;
         }
       }
@@ -659,6 +677,9 @@ if (!app.requestSingleInstanceLock()) {
     };
 
     const refreshMenu = (): void => {
+      // Setting the application menu puts it on every window that is already
+      // open, including the ones on the reporting monitors, so they have to be
+      // stripped again afterwards rather than only when they are made.
       Menu.setApplicationMenu(
         buildMenu(
           {
@@ -695,6 +716,8 @@ if (!app.requestSingleInstanceLock()) {
           debug
         )
       );
+
+      reading.hideMenus();
     };
 
     refreshMenu();

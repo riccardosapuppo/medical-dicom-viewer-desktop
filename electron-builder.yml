@@ -24,6 +24,9 @@ directories:
 
 files:
   - dist/app/**/*
+  # A source map carries the TypeScript it was built from. The build only
+  # writes them while developing, and this is the second lock on the door.
+  - "!dist/app/**/*.map"
   - package.json
 
 # Read at run time from the installed application rather than bundled, because

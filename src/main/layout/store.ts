@@ -152,13 +152,18 @@ export function remember(
 
     const kept = newest(Object.fromEntries(withAge), MAX_DESKS);
     return {
+      // Everything else this file holds is carried through. Both returns here
+      // used to build a fresh object with only the desks in it, which silently
+      // threw away the list of folders opened before — every time a study was
+      // sent to a screen.
+      ...layouts,
       desks: Object.fromEntries(
         Object.entries(kept).map(([key, value]) => [key, { studies: value.studies }])
       ),
     };
   }
 
-  return { desks };
+  return { ...layouts, desks };
 }
 
 /**

@@ -956,3 +956,19 @@ body {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* Something the person has to do before this application can work. Amber
+   rather than red: nothing is broken, something has not been set up. */
+.notice {
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--ink);
+  background: rgba(240, 169, 46, 0.12);
+  border-bottom: 1px solid rgba(240, 169, 46, 0.4);
+}
+
+.notice code {
+  font-family: var(--mono);
+  color: var(--live);
+}

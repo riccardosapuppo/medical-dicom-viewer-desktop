@@ -96,6 +96,15 @@ const api = {
 
   viewerPresent: (): Promise<boolean> => ipcRenderer.invoke('viewer:present'),
 
+  /**
+   * Whether this is an installed copy.
+   *
+   * What the page may suggest depends on it: an installed application has no
+   * project directory and no npm, so telling somebody to run a script there is
+   * an instruction they cannot follow.
+   */
+  installed: (): Promise<boolean> => ipcRenderer.invoke('app:installed'),
+
   /** What the title bar says, which is not what the document calls itself. */
   windowTitle: (): Promise<string> => ipcRenderer.invoke('window:current'),
 
