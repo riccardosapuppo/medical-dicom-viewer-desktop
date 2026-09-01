@@ -16,11 +16,30 @@ an application that works with nothing installed and no network at all.
 The original was built for a client and lives in a private repository. This is an
 independent reimplementation, written from scratch against public data.
 
+## Before you start
+
+- **Node.js 22** or newer, and npm. That is what this is built and checked on.
+- **Yarn 1.x** (Classic), for one command only. `npm run viewer` builds the web
+  viewer from its own repository, which is a yarn workspace and does not install
+  correctly with npm. The script checks for yarn and says so, rather than
+  failing halfway through; `npm install --global yarn` if you need it.
+- **Git**, for the same command: the viewer is fetched at a pinned commit.
+- **A connection**, once, for the viewer and the demonstration studies. After
+  that the application runs with no network at all, which is rather the point:
+  a reading room is not always on the internet and often is not on it at all.
+- **About 750 MB** in place — 414 MB of packages, 266 MB of studies, 37 MB of
+  built viewer. Building the viewer needs several gigabytes more while it
+  happens, for a checkout that is deleted afterwards. Producing an installer
+  adds about 320 MB on top of that.
+
+No Docker, no database, no DICOM toolkit, and no administrator rights: on
+Windows the installer this produces installs per user, deliberately.
+
 ## Where it is
 
 ```
 npm install
-npm run viewer             # fetches and builds the viewer (slow, needs a connection)
+npm run viewer             # fetches and builds the viewer (slow, needs yarn, git and a connection)
 npm run demo-data          # downloads five studies from The Cancer Imaging Archive
 npm start                  # builds and opens the window
 npm start -- --open ./demo-data

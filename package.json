@@ -1,6 +1,9 @@
 {
   "name": "dicom-workstation",
   "version": "0.1.0",
+  "engines": {
+    "node": ">=22"
+  },
   "private": true,
   "description": "A reading-room workstation: native windows placed on the panes of glass they belong to, arrangements that come back, and studies read from disk.",
   "license": "MIT",
