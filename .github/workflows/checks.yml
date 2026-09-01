@@ -1,6 +1,6 @@
 # What runs on every push.
 #
-# Not everything this project can check. `check:ui` and `check:packaged` drive
+# Not everything this project can check. `check:viewer` and `check:packaged` drive
 # a real window and read pixels back off a graphics card, and a runner has
 # neither a screen nor a GPU: run there they would fail for a reason that has
 # nothing to do with the code, and a check that fails for the wrong reason

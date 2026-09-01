@@ -34,7 +34,7 @@ export interface Library {
   open: () => void;
   /** The file chooser: a study is often handed over as loose files. */
   openFiles: () => void;
-  /** The study that ships inside the application. */
+  /** The demonstration studies, if they have been downloaded. */
   openSample: () => void;
   read: (folder: string) => void;
   cancel: () => void;

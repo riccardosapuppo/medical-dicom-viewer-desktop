@@ -71,8 +71,15 @@ const api = {
   /** The folders opened before, newest first. */
   recentFolders: (): Promise<string[]> => ipcRenderer.invoke('library:recent'),
 
-  /** Where the study that ships inside the application lives. */
-  sampleFolder: (): Promise<string> => ipcRenderer.invoke('library:sample'),
+/**
+   * Where the demonstration studies are, if they have been downloaded.
+   *
+   * Nothing ships inside the application: what used to be here was drawn from a
+   * formula, and `npm run demo-data` fetches real acquisitions instead. Absent
+   * until it has been run, and always absent in an installed copy, which has no
+   * project directory to put them in.
+   */
+  sampleFolder: (): Promise<string | undefined> => ipcRenderer.invoke('library:sample'),
 
   /**
    * Whether the viewer has been built into this copy.

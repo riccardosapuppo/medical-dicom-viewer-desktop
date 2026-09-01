@@ -42,14 +42,18 @@ const electron = path.join(
 
 /** Starts the application, with a folder or without one. */
 function start(open) {
+  // The language is forced. The viewer formats the overlay date with the
+  // system locale, so a picture taken on this machine had an Italian month
+  // abbreviation in it — the capture machine showing through the product, in
+  // the one image every reader looks at.
   const args = open
-    ? [root, '--open', open, `--remote-debugging-port=${PORT}`]
-    : [root, `--remote-debugging-port=${PORT}`];
+    ? [root, '--open', open, '--lang=en-GB', `--remote-debugging-port=${PORT}`]
+    : [root, '--lang=en-GB', `--remote-debugging-port=${PORT}`];
 
   return spawn(electron, args, {
     cwd: root,
     stdio: 'ignore',
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined },
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, LANG: 'en_GB.UTF-8' },
   });
 }
 

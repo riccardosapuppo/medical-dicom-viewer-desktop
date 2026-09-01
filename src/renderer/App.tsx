@@ -1,10 +1,13 @@
 /**
- * What the window shows: a folder of studies once one is open, and the desk it
- * is standing on until then.
+ * What the window shows: a folder of studies once one is open, and how to open
+ * one until then.
  *
- * The desk is not a placeholder for an empty screen. Everything the workstation
- * does afterwards is placing windows on those panes and putting them back where
- * they were, and being able to see the arrangement the application believes in
+ * The desk — a diagram of the monitors, drawn to scale — is under View, Screen
+ * Layout. It was the opening screen once, and it was the wrong thing to greet
+ * somebody with: they came to read a study, not to look at a picture of their
+ * own monitors. It earns its place where it is, because everything this
+ * application does with several screens is placing windows on those panes and
+ * putting them back where they were, and seeing the arrangement it believes in
  * is what makes that debuggable rather than magic.
  */
 import React, { useEffect, useRef, useState } from 'react';

@@ -110,6 +110,21 @@ export function configureFor(original: string, archiveRoot: string): string {
   // an archive that answers only while a token is valid. What it means here is
   // that a file could not be read from the folder, which is what it now says.
   config.fetchErrorMessage = 'These images could not be read from the folder.';
+
+  // One language across the whole application. The viewer chooses its own from
+  // the machine, and everything around it here is in English, so on a computer
+  // set to another language the menu bar and the worklist were English and the
+  // viewer was not. Set before the viewer starts, which is what this file is: it
+  // runs before its bundle.
+  //
+  // This does not reach the date drawn on the image. That is formatted with the
+  // system's own locale, which is below anything a page can set.
+  try {
+    window.localStorage.setItem('i18nextLng', 'en-US');
+  } catch (ignored) {
+    // A window with no storage still gets a viewer, in whatever language it
+    // decides for itself. Not worth refusing to start over.
+  }
 })();
 `;
 

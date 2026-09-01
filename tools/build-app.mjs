@@ -22,9 +22,9 @@ import * as esbuild from 'esbuild';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'dist', 'app');
 
-// La versione viene da package.json e viene messa dentro il preload al momento
-// della compilazione. Un numero che qualcuno deve tenere allineato a mano e' un
-// numero che prima o poi sara sbagliato.
+// The version comes from package.json and is put into the preload when it is
+// built. A number somebody has to keep in step by hand is a number that will be
+// wrong.
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const watch = process.argv.includes('--watch');
 

@@ -1,10 +1,10 @@
 {
-  "readme": "The studies the demonstration loads. Nothing here is committed as pixel data: scripts/fetch-studies.mjs downloads these series from The Cancer Imaging Archive at setup time. They are real clinical acquisitions, de-identified by the archive before publication.",
+  "readme": "The studies the demonstration loads. Nothing here is committed as pixel data: tools/get-studies.mjs downloads these series from The Cancer Imaging Archive at setup time. They are real clinical acquisitions, de-identified by the archive before publication.",
   "source": {
     "archive": "The Cancer Imaging Archive (TCIA)",
     "api": "https://services.cancerimagingarchive.net/nbia-api/services/v1",
     "usagePolicy": "https://www.cancerimagingarchive.net/data-usage-policies-and-restrictions/",
-    "note": "Each download carries the collection licence inside it; scripts/fetch-studies.mjs keeps that file next to the images it applies to."
+    "note": "Each download carries the collection licence inside it; tools/get-studies.mjs keeps that file next to the images it applies to."
   },
   "collections": {
     "LIDC-IDRI": {

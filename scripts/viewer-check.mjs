@@ -49,7 +49,20 @@ if (!packaged && !fs.existsSync(path.join(root, 'dist', 'app', 'viewer', 'index.
   process.exit(1);
 }
 
-const unpacked = path.join(root, 'release', 'win-unpacked', 'DICOM Workstation.exe');
+/**
+ * Where electron-builder leaves the unpacked application, per system.
+ *
+ * A single Windows path here meant that on macOS and Linux the two commands the
+ * README gives in the same block contradicted each other: package:dir built the
+ * application, and check:packaged then said there was no packaged build.
+ */
+const UNPACKED = {
+  win32: ['release', 'win-unpacked', 'DICOM Workstation.exe'],
+  darwin: ['release', 'mac', 'DICOM Workstation.app', 'Contents', 'MacOS', 'DICOM Workstation'],
+  linux: ['release', 'linux-unpacked', 'dicom-workstation'],
+};
+
+const unpacked = path.join(root, ...(UNPACKED[process.platform] ?? UNPACKED.linux));
 
 if (packaged && !fs.existsSync(unpacked)) {
   console.error('There is no packaged build. Run: npm run package:dir');

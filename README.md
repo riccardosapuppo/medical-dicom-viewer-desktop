@@ -214,14 +214,18 @@ again.
 
 ![The opening screen](docs/start.png)
 
-With no folder open the window shows the desk it is standing on, drawn to scale.
-That is not a placeholder: everything this application does is place windows on
-those panes and put them back where they were, and being able to see the
-arrangement it believes in is what makes that debuggable rather than magic. It
-redraws when a monitor is plugged, unplugged or rescaled — and only when the
-fingerprint actually moves, since the same event also fires for a colour profile
-change, which moves no window. The picture above is from a machine with one
-screen, which is why there is no desk drawn in it.
+With no folder open the window says how to open one, and nothing else. It showed
+the desk once — a diagram of the monitors, drawn to scale — and that was the
+wrong thing to greet somebody with: they came to read a study, not to look at a
+picture of their own monitors.
+
+The desk is under **View, Screen Layout**, where it earns its place. Everything
+this application does with several screens is placing windows on those panes and
+putting them back where they were, and seeing the arrangement it believes in is
+what makes that debuggable rather than magic. It redraws when a monitor is
+plugged, unplugged or rescaled — and only when the fingerprint actually moves,
+since the same event also fires for a colour profile change, which moves no
+window.
 
 The pictures in this file are taken by `node scripts/screenshots.mjs`, driving
 the real application. A README whose pictures are of a version that no longer
@@ -396,6 +400,10 @@ that de-identified it, and it lands in a folder that is not committed.
   Raw datasets written without a Part 10 wrapper are skipped.
 - `physical` is `bounds x scaleFactor` — the panel's real pixel count as the
   system reports it, which is not the same as its advertised specification.
+- The date drawn on the image follows the machine's language, while everything
+  around it is English. It is formatted with the system locale, which is below
+  anything the application can set, so on a computer set to Italian the overlay
+  reads "1 gen, 2000" beside a study list reading "01-Jan-2000".
 - If `ELECTRON_RUN_AS_NODE` is set in your shell, Electron starts as plain Node
   and no Electron API exists. `npm run displays` says so and stops.
 

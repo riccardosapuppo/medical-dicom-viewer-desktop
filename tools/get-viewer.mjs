@@ -15,8 +15,8 @@
  *
  * This is slow — a full install of a large monorepo, then a production build.
  * Ten to twenty minutes on a first run, and several gigabytes in `viewer/`
- * while it happens. The result is a few hundred megabytes in `viewer-dist/`,
- * and that is what gets packaged.
+ * while it happens. The result is about 38 MB in `viewer-dist/`, and that is
+ * what gets packaged. The real figure is printed when it finishes.
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';

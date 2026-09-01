@@ -7,10 +7,11 @@
  * study, not for a picture of their own desk. The desk is still there, under
  * View, where somebody who wants it can find it.
  *
- * Three ways in, because people arrive with their data in three shapes: a
- * folder off an archive, a handful of loose files somebody emailed, and — for
- * anybody who has none of it — a study that ships inside the application, so
- * the thing can be seen working before it is trusted with anything real.
+ * Two ways in, because people arrive with their data in two shapes: a folder
+ * off an archive, and a handful of loose files somebody emailed. A third is
+ * offered when it can be: the demonstration studies, once `npm run demo-data`
+ * has downloaded them, so the thing can be seen working before it is trusted
+ * with anything real. Nothing is shipped inside the application.
  */
 import React, { useEffect, useState } from 'react';
 
