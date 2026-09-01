@@ -78,24 +78,51 @@ export function ownTitle(window: BrowserWindow): void {
   });
 }
 
+/** The schemes this application is made of. Anything else is somewhere else. */
+const OURS = ['viewer:', 'file:'];
+
 export function guardShortcuts(window: BrowserWindow, debug: boolean): void {
-  if (debug) {
-    return;
+  // Kept out of the way of somebody who asked for them, and only them. This
+  // used to be every unpackaged run, which is every run from source.
+  if (!debug) {
+    window.webContents.on('before-input-event', (event, input) => {
+      const key = input.key.toLowerCase();
+      const modified = input.control || input.meta;
+
+      // Reload is what makes this worth guarding rather than merely untidy:
+      // pressed by accident it throws away the folder and the window, with
+      // nothing to undo it. F5 is matched with or without a modifier, which is
+      // what Ctrl+F5 is.
+      const reload = (modified && key === 'r') || key === 'f5';
+      const devTools = key === 'f12' || (modified && input.shift && key === 'i');
+
+      if (reload || devTools) {
+        event.preventDefault();
+      }
+    });
   }
 
-  window.webContents.on('before-input-event', (event, input) => {
-    const key = input.key.toLowerCase();
-    const modified = input.control || input.meta;
+  /**
+   * The window stays inside the application.
+   *
+   * This used to refuse every navigation, on the grounds that nothing here
+   * navigates — which stopped being true the moment the reading surface became
+   * a page with routing of its own. Refusing them all would leave the viewer
+   * unable to move between its own screens, and it would look like the
+   * application had frozen.
+   *
+   * So what is refused is leaving: a link to somewhere on the internet opens in
+   * the browser, where a person can see what it is, rather than replacing the
+   * study they were reading with a web page.
+   */
+  window.webContents.on('will-navigate', (event, url) => {
+    if (OURS.some(scheme => url.startsWith(scheme))) {
+      return;
+    }
 
-    const reload = (modified && key === 'r') || key === 'f5';
-    const devTools = key === 'f12' || (modified && input.shift && key === 'i');
-
-    if (reload || devTools) {
-      event.preventDefault();
+    event.preventDefault();
+    if (url.startsWith('https://')) {
+      void shell.openExternal(url);
     }
   });
-
-  // A page that navigates is a page that has thrown its state away. Nothing in
-  // this application navigates: every view is a state change inside one page.
-  window.webContents.on('will-navigate', event => event.preventDefault());
 }

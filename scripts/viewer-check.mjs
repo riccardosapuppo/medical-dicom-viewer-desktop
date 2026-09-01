@@ -186,6 +186,28 @@ try {
 
   const frames = asked.filter(url => url.includes('/frames/'));
   check('the viewer asked the archive for pixels', frames.length > 0, `${frames.length} frames`);
+
+  // The page moving itself, which is what a link inside the viewer does. The
+  // window used to refuse every navigation on the grounds that nothing here
+  // navigated — true until the reading surface became a page with routing of
+  // its own, after which the viewer could not move between its own screens and
+  // looked frozen.
+  await page.evaluate(() => {
+    window.location.href = '/';
+  });
+
+  const rows = await page
+    .waitForFunction(
+      () => {
+        const found = document.querySelectorAll('tr[data-cy="studyRow"], tr.cursor-pointer');
+        return found.length > 0 ? found.length : false;
+      },
+      { timeout: 120000 }
+    )
+    .then(handle => handle.jsonValue())
+    .catch(() => 0);
+
+  check('the viewer can move between its own screens', rows > 0, `${rows} studies listed`);
 } finally {
   await browser.close().catch(() => {});
   child.kill();
