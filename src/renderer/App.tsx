@@ -153,7 +153,20 @@ export function App(): React.ReactElement {
         event.preventDefault();
         setDragging(true);
       }}
-      onDragLeave={() => setDragging(false)}
+      onDragLeave={event => {
+        // A dragleave fires every time the pointer crosses from one element to
+        // the next inside the window — a heading, a button, a row — and each one
+        // bubbles up here. Taken at face value the outline blinked on and off
+        // all the way across the window instead of reading as "drop here". What
+        // matters is whether the pointer has actually left: relatedTarget is
+        // where it went, and null means it went outside.
+        const wentTo = event.relatedTarget;
+        const stillInside = wentTo instanceof Node && event.currentTarget.contains(wentTo);
+
+        if (!stillInside) {
+          setDragging(false);
+        }
+      }}
       onDrop={onDrop}
     >
       <header className="masthead">
