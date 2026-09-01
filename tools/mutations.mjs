@@ -285,6 +285,30 @@ const MUTATIONS = [
     "    const prefix = url.pathname.slice(0, url.pathname.indexOf('/dicom-web')) + '/dicom-web';",
     'archive: any secret opens the archive, so the port is enough',
   ],
+  [
+    'src/main/menu-template.ts',
+    '        ...(debug',
+    '        ...(true',
+    'menu: an ordinary run is handed reload and the developer tools',
+  ],
+  [
+    'src/main/menu-template.ts',
+    '          enabled: actions.readingStudy,',
+    '          enabled: true,',
+    'menu: leaving a study is offered when there is no study to leave',
+  ],
+  [
+    'src/main/menu-template.ts',
+    '          enabled: actions.hasDemoStudies,',
+    '          enabled: true,',
+    'menu: studies that have not been downloaded are offered anyway',
+  ],
+  [
+    'src/renderer/format.ts',
+    "  return patient.patientId ? `Anonymized — ${patient.patientId}` : 'Unidentified';",
+    "  return 'Unidentified';",
+    'worklist: a de-identified patient loses the identifier the file does carry',
+  ],
 ];
 
 const originals = new Map();

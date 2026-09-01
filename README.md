@@ -255,7 +255,7 @@ enumeration order deliberately thrown away first.
 
 ## Checking that it works
 
-`npm test` runs 135 tests. `npm run mutations` breaks the code on purpose in 44
+`npm test` runs 147 tests. `npm run mutations` breaks the code on purpose in 48
 places and checks the tests notice; none of them survive. The harness refuses to
 start against a suite that is already failing, and a mutation that will not
 compile is reported as broken rather than counted as caught — a check that cannot
@@ -265,6 +265,11 @@ The five aimed at the archive are the ones that matter most: a search in the
 study list that matches everybody, a study that reports its images as though they
 were series, a patient's name cleaned away, every study served shifted by one
 slice, and an archive that any secret opens.
+
+Four more are aimed at the menu bar, which is the first thing anybody opening
+this looks at and which has been wrong twice. It could not be tested before —
+building a menu needs a running application — so the template is now data, in a
+module that takes nothing from Electron but its types.
 
 `npm run check:viewer` is the one that could not be written any other way. It
 opens the application on a folder, waits for the worklist, clicks a series, and

@@ -30,7 +30,13 @@ import { Indexer } from './library/indexer-host';
 import { buildMenu, guardShortcuts, ownTitle, titleWindow } from './menu';
 import { ReadingWindows } from './layout/reading-windows';
 import { startArchive, type Archive } from './dicomweb/server';
-import { serveViewer, viewerPresent, VIEWER_PRIVILEGES, VIEWER_URL } from './viewer';
+import {
+  serveViewer,
+  viewerPresent,
+  VIEWER_PRIVILEGES,
+  VIEWER_SCHEME,
+  VIEWER_URL,
+} from './viewer';
 import {
   arrangement,
   load,
@@ -141,6 +147,7 @@ function createWindow(): BrowserWindow {
   window.once('ready-to-show', () => window.show());
   guardShortcuts(window, debug);
   ownTitle(window);
+
 
   // Forgotten on close, so that nothing later sends to a window that is gone.
   // On macOS the application outlives its window, and every send after that
@@ -263,6 +270,12 @@ if (!app.requestSingleInstanceLock()) {
 
     // The opening screen asks, so it can say what is missing instead of the
     // window going blank on someone who has not built the viewer yet.
+    /** Whether the window is showing a study rather than the worklist. */
+    const showingViewer = (): boolean =>
+      mainWindow !== undefined &&
+      !mainWindow.isDestroyed() &&
+      mainWindow.webContents.getURL().startsWith(`${VIEWER_SCHEME}://`);
+
     ipcMain.handle('viewer:present', () => viewerPresent(VIEWER));
 
     /**
@@ -575,7 +588,14 @@ if (!app.requestSingleInstanceLock()) {
                 openFolder(folder);
               }
             },
-            closeStudy: () => mainWindow?.webContents.send('library:close'),
+            readingStudy: showingViewer(),
+            backToWorklist: () => void mainWindow?.loadFile(RENDERER),
+            closeFolder: () => {
+              if (showingViewer()) {
+                void mainWindow?.loadFile(RENDERER);
+              }
+              mainWindow?.webContents.send('library:close');
+            },
             showScreens: () => mainWindow?.webContents.send('view:screens'),
             showAbout,
             recent: layouts.recent ?? [],
@@ -588,7 +608,22 @@ if (!app.requestSingleInstanceLock()) {
 
     refreshMenu();
 
-    mainWindow = createWindow();
+    /**
+     * The main window, and what has to be true of every one of them.
+     *
+     * What the menu offers depends on whether a study is open, and that changes
+     * when the window is handed to the viewer and back. Attached here rather
+     * than inside createWindow because the menu is built here — and attached in
+     * one place because the window is created in two, and the second one is
+     * exactly the sort of thing that gets forgotten.
+     */
+    const openMainWindow = (): BrowserWindow => {
+      const window = createWindow();
+      window.webContents.on('did-navigate', () => refreshMenu());
+      return window;
+    };
+
+    mainWindow = openMainWindow();
 
     const opening = folderFromArgs(process.argv);
     if (opening && !process.argv.includes('--capture')) {
@@ -631,7 +666,7 @@ if (!app.requestSingleInstanceLock()) {
     // clicking the dock icon is expected to bring it back.
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createWindow();
+        mainWindow = openMainWindow();
       }
     });
   });

@@ -15,7 +15,12 @@ export interface MenuActions {
   openSample: () => void;
   /** Whether the demonstration studies have been downloaded yet. */
   hasDemoStudies: boolean;
-  closeStudy: () => void;
+  /** Back from the viewer to the worklist. */
+  backToWorklist: () => void;
+  /** Whether the window is showing a study, which is when that is possible. */
+  readingStudy: boolean;
+  /** Closes the folder and returns to the opening screen. */
+  closeFolder: () => void;
   showScreens: () => void;
   showAbout: () => void;
   recent: string[];
@@ -103,7 +108,17 @@ export function menuTemplate({
           click: actions.openSample,
         },
         { type: 'separator' },
-        { label: 'Back to Worklist', accelerator: 'CmdOrCtrl+W', click: actions.closeStudy },
+        {
+          label: 'Back to Worklist',
+          accelerator: 'CmdOrCtrl+W',
+          // Only while a study is open. It used to be a message to the worklist
+          // page, which stops existing the moment the window is handed to the
+          // viewer — so from a study, the one place somebody would reach for
+          // it, it did nothing at all.
+          enabled: actions.readingStudy,
+          click: actions.backToWorklist,
+        },
+        { label: 'Close Folder', click: actions.closeFolder },
         { type: 'separator' },
         onMac ? { role: 'close' } : { role: 'quit', label: 'Exit' },
       ],

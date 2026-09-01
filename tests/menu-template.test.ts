@@ -24,7 +24,9 @@ const ACTIONS: MenuActions = {
   openFiles: nothing,
   openSample: nothing,
   hasDemoStudies: true,
-  closeStudy: nothing,
+  backToWorklist: nothing,
+  readingStudy: true,
+  closeFolder: nothing,
   showScreens: nothing,
   showAbout: nothing,
   recent: [],
@@ -153,4 +155,29 @@ test('the mac build puts the application menu first, and About in it', () => {
     labels(help ? [help] : []).some(label => label.startsWith('About ')),
     false
   );
+});
+
+test('going back to the worklist is offered only while a study is open', () => {
+  const entry = (reading: boolean): Item | undefined =>
+    everything(
+      menuTemplate({
+        actions: { ...ACTIONS, readingStudy: reading },
+        debug: false,
+        appName: 'x',
+        onMac: false,
+      }) as Item[]
+    ).find(item => item.label === 'Back to Worklist');
+
+  assert.equal(entry(true)?.enabled, true);
+
+  // It used to be a message sent to the worklist page, which stops existing the
+  // moment the window is handed to the viewer — so from a study, the one place
+  // anybody would reach for it, it did nothing at all.
+  assert.equal(entry(false)?.enabled, false);
+});
+
+test('closing the folder is a different thing from leaving a study', () => {
+  const said = labels(template(false));
+  assert.ok(said.includes('Back to Worklist'));
+  assert.ok(said.includes('Close Folder'));
 });
