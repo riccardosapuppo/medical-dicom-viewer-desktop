@@ -76,5 +76,5 @@ linux:
 publish:
   - provider: github
     owner: riccardosapuppo
-    repo: dicom-workstation
+    repo: medical-dicom-viewer-desktop
     releaseType: draft

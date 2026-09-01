@@ -16,7 +16,7 @@ import { menuTemplate, type MenuActions } from './menu-template';
 
 export type { MenuActions } from './menu-template';
 
-const PROJECT = 'https://github.com/riccardosapuppo/dicom-workstation';
+const PROJECT = 'https://github.com/riccardosapuppo/medical-dicom-viewer-desktop';
 
 export function buildMenu(
   actions: Omit<MenuActions, 'openProjectPage'>,
