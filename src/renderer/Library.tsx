@@ -59,19 +59,27 @@ function SeriesRow({ series }: { series: Series }): React.ReactElement {
     <li className="series">
       <span className="series__number">{series.seriesNumber ?? '--'}</span>
       <span className="series__name">{series.description || 'unnamed series'}</span>
-      <span className="series__count">{series.instances.length} img</span>
+      <span className="series__count">
+        {series.instances.length} {series.holds ? 'obj' : 'img'}
+      </span>
       <span className="series__shape">
         {first ? `${first.pixels.columns ?? '?'} x ${first.pixels.rows ?? '?'}` : ''}
       </span>
       {/* Worth saying out loud: a stack ordered by number rather than by
           position is a stack that may be upside down, and the only place that
           can be known is here. */}
+      {/* What this series holds, when it is not pictures — a presentation
+          state, a report, something that says how an image should be shown.
+          Saying so is the difference between a study with three broken series
+          and a study with three things in it that are not images. */}
       <span
         className={
-          series.orderedByGeometry ? 'series__order' : 'series__order series__order--weak'
+          series.holds || !series.orderedByGeometry
+            ? 'series__order series__order--weak'
+            : 'series__order'
         }
       >
-        {series.orderedByGeometry ? 'by position' : 'by number'}
+        {series.holds ?? (series.orderedByGeometry ? 'by position' : 'by number')}
       </span>
     </li>
   );

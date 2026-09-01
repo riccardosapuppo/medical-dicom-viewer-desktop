@@ -19,6 +19,7 @@
  * arrangements can be written down in a test instead of waited for.
  */
 import type { InstanceHeader, PixelLayout } from './read-header';
+import { carriesPixels, kindOf } from './object-kind';
 
 export interface Instance {
   sopInstanceUid: string;
@@ -39,6 +40,18 @@ export interface Series {
   instances: Instance[];
   /** True when every slice carried a position and the stack could be ordered by it. */
   orderedByGeometry: boolean;
+
+  /**
+   * What this series holds, when it is not pictures.
+   *
+   * A study is not only images: alongside them sit objects that say how a
+   * picture should be shown, what was found in it, or what was measured. They
+   * carry no pixels, and reading them as images that failed is how a perfectly
+   * good study came to report three broken series.
+   *
+   * Undefined for anything that is images.
+   */
+  holds?: string;
 }
 
 export interface Study {
@@ -147,6 +160,11 @@ function buildSeries(headers: InstanceHeader[]): Series {
     return byNumber !== 0 ? byNumber : a.filePath.localeCompare(b.filePath);
   });
 
+  // The file's own answer wins over the catalogue of SOP classes: something
+  // with pixel data is images whatever its class claims to be.
+  const images = instances.some(instance => carriesPixels(instance.pixels));
+  const holds = images ? undefined : (kindOf(first.sopClassUid) ?? 'no images');
+
   return {
     seriesInstanceUid: first.seriesInstanceUid,
     seriesNumber: first.seriesNumber,
@@ -154,6 +172,7 @@ function buildSeries(headers: InstanceHeader[]): Series {
     modality: first.modality,
     instances,
     orderedByGeometry: positions !== undefined,
+    ...(holds ? { holds } : {}),
   };
 }
 

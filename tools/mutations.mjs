@@ -315,6 +315,18 @@ const MUTATIONS = [
     '        dicomParser.readEncapsulatedPixelDataFromFragments(dataSet, element, 0, 1)',
     'frames: every frame of a compressed series is served as the first one',
   ],
+  [
+    'src/main/dicom/build-index.ts',
+    '  const images = instances.some(instance => carriesPixels(instance.pixels));',
+    '  const images = true;',
+    'index: a presentation state is listed as a series of images that will not open',
+  ],
+  [
+    'src/main/dicom/object-kind.ts',
+    '  return pixels.dataOffset !== undefined;',
+    '  return true;',
+    'index: something carrying no pixels is taken for a picture',
+  ],
 ];
 
 const originals = new Map();

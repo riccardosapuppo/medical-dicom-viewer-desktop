@@ -223,3 +223,38 @@ test('a real duplicate is still only counted once', () => {
 
   assert.equal(buildIndex(twice).duplicates, 1);
 });
+
+test('a series that holds no images is named for what it does hold', () => {
+  // The elbow MR that reported three broken series. One of them was called
+  // "DEFAULT PS SERIES", which says in its name that it is a presentation
+  // state — an object describing how an image should be shown.
+  const state = buildIndex([
+    header({
+      seriesInstanceUid: '1.2.3.100.9',
+      seriesDescription: 'DEFAULT PS SERIES',
+      modality: 'PR',
+      sopClassUid: '1.2.840.10008.5.1.4.1.1.11.1',
+      pixels: { ...header().pixels, dataOffset: undefined, rows: undefined, columns: undefined },
+    }),
+  ]);
+
+  const series = state.patients[0]?.studies[0]?.series[0];
+  assert.equal(series?.holds, 'presentation state');
+});
+
+test('something with no pixels and no name anybody knows still says it has none', () => {
+  const unknown = buildIndex([
+    header({
+      seriesInstanceUid: '1.2.3.100.8',
+      sopClassUid: '1.3.46.670589.11.0.0.51',
+      pixels: { ...header().pixels, dataOffset: undefined },
+    }),
+  ]);
+
+  assert.equal(unknown.patients[0]?.studies[0]?.series[0]?.holds, 'no images');
+});
+
+test('a series of images is not labelled at all', () => {
+  const images = buildIndex([header()]);
+  assert.equal(images.patients[0]?.studies[0]?.series[0]?.holds, undefined);
+});

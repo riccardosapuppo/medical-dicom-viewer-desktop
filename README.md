@@ -273,7 +273,7 @@ enumeration order deliberately thrown away first.
 
 ## Checking that it works
 
-`npm test` runs 162 tests. `npm run mutations` breaks the code on purpose in 49
+`npm test` runs 175 tests. `npm run mutations` breaks the code on purpose in 51
 places and checks the tests notice; none of them survive. The harness refuses to
 start against a suite that is already failing, and a mutation that will not
 compile is reported as broken rather than counted as caught — a check that cannot
@@ -411,6 +411,10 @@ that de-identified it, and it lands in a folder that is not committed.
   the only way to test it without owning it. None of it has met real hardware.
 - Explicit and implicit VR little endian are read by the index, and both are
   covered by tests. Big endian is not handled.
+- A study is not only pictures. Presentation states, reports, registrations and
+  the rest sit in series of their own and hold no pixels; they are listed as what
+  they are rather than as images that will not open. The viewer is served their
+  metadata and asked for no frames.
 - Compressed pixel data is passed to the viewer as it is stored, with the media
   type that says what it is, and the viewer decodes it. Four ways of finding a
   frame are tried; where a file has several frames, no offset table, a fragment

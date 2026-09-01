@@ -63,8 +63,15 @@ function checkSeries(study: Study, series: Series): boolean {
   const name = series.description || 'unnamed series';
 
   if (!first) {
-    console.log(`    ${name}: no images`);
-    return false;
+    console.log(`  --    ${name}   empty`);
+    return true;
+  }
+
+  if (series.holds) {
+    // Not a picture, and not a failure. A study carries objects that say how an
+    // image should be shown or what was found in it, and they hold no pixels.
+    console.log(`  --    ${name}   ${series.instances.length} object(s), ${series.holds}`);
+    return true;
   }
 
   const syntax = named(first.pixels.transferSyntaxUid);
@@ -164,7 +171,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log(`${ok} series the viewer can open, ${bad} it cannot.`);
+  console.log(`${ok} series the viewer can open or does not need to, ${bad} it cannot.`);
 
   if (bad > 0) {
     // The reason above is the useful part, and it is the thing to send on.
