@@ -19,6 +19,8 @@ import { Indexer } from './library/indexer-host';
 import { buildMenu, guardShortcuts } from './menu';
 import { PixelServer, SCHEME } from './library/pixel-server';
 import { ReadingWindows } from './layout/reading-windows';
+import { startArchive, type Archive } from './dicomweb/server';
+import { serveViewer, viewerPresent, VIEWER_PRIVILEGES, VIEWER_URL } from './viewer';
 import {
   arrangement,
   load,
@@ -31,6 +33,15 @@ import {
 
 /** Where the built renderer lives, relative to the compiled main process. */
 const RENDERER = path.join(__dirname, 'renderer', 'index.html');
+
+/**
+ * Where the viewer lives.
+ *
+ * Fetched and built by `npm run viewer` rather than kept in this repository:
+ * it is the web viewer's own repository at a fixed commit, and copying it in
+ * would mean it is never updated again.
+ */
+const VIEWER = path.join(__dirname, 'viewer');
 
 /**
  * The icon, for the window and the taskbar.
@@ -145,6 +156,7 @@ protocol.registerSchemesAsPrivileged([
     scheme: SCHEME,
     privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
   },
+  VIEWER_PRIVILEGES,
 ]);
 
 // A second launch is a study being opened, not a second application.
@@ -196,6 +208,27 @@ if (!app.requestSingleInstanceLock()) {
     const pixels = new PixelServer();
     const reading = new ReadingWindows();
 
+    /**
+     * The archive the viewer reads studies from.
+     *
+     * Started empty and pointed at a folder once one is opened. It has to exist
+     * before the window is ever told to load the viewer, because its address —
+     * a port the system picks and a secret made at startup — is what the
+     * viewer's configuration is rewritten to point at.
+     */
+    let archive: Archive | undefined;
+
+    if (viewerPresent(VIEWER)) {
+      void startArchive({ patients: [], duplicates: 0 }).then(started => {
+        archive = started;
+        serveViewer({ folder: VIEWER, archiveRoot: started.root });
+      });
+    }
+
+    // The opening screen asks, so it can say what is missing instead of the
+    // window going blank on someone who has not built the viewer yet.
+    ipcMain.handle('viewer:present', () => viewerPresent(VIEWER));
+
     const layoutFile = path.join(app.getPath('userData'), 'layouts.json');
     let layouts: Layouts = load(layoutFile);
 
@@ -209,12 +242,21 @@ if (!app.requestSingleInstanceLock()) {
       // at, and it changes at the same moment the list does.
       if (message.type === 'done') {
         pixels.remember(message.index);
+        archive?.serve(message.index);
         current = message;
         layouts = rememberFolder(layouts, message.folder);
         save(layoutFile, layouts);
         refreshMenu();
+
+        // The folder is read; from here the viewer takes over. It shows what is
+        // in the folder as a study list of its own, so the opening screen has
+        // done its job and steps out of the way.
+        if (archive && mainWindow) {
+          void mainWindow.loadURL(VIEWER_URL);
+        }
       } else if (message.type === 'failed') {
         pixels.forget();
+        archive?.serve({ patients: [], duplicates: 0 });
         current = undefined;
       }
 

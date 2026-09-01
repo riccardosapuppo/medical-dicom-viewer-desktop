@@ -3,3 +3,8 @@ dist/
 release/
 demo-data/
 *.log
+
+# The viewer is fetched and built by `npm run viewer`, not committed:
+# vendoring a monorepo means it is never updated again.
+viewer/
+viewer-dist/
