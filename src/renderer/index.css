@@ -398,6 +398,29 @@ body {
   align-items: start;
 }
 
+/* Everything on the right of a study row: which screen to send it to, and the
+   control that shows what is inside. */
+.study__aside {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+}
+
+.study__screens {
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+
+/* Quiet until the row is under the pointer or reached by keyboard: a worklist
+   of forty studies with four numbered buttons on every row is a wall. */
+.study:hover .study__screens,
+.study:focus-within .study__screens {
+  opacity: 1;
+}
+
 .study > .series-list {
   grid-column: 1 / -1;
 }
@@ -605,20 +628,6 @@ body {
   outline-offset: 1px;
 }
 
-/* The button that opens a series is display: contents, so it has no box of its
-   own for an outline to be drawn on — the focus ring was simply invisible, and
-   somebody tabbing through a worklist had no idea where they were. The row
-   around it does have a box, so the ring goes there. */
-.series:has(.series__open:focus-visible) {
-  outline: 1px solid var(--live);
-  outline-offset: -1px;
-  color: var(--ink);
-}
-
-.series:has(.series__open:focus-visible) .series__screens {
-  opacity: 1;
-}
-
 /* The image sits on black, not on the interface grey: any surround lighter
    than the darkest part of the image changes how the image is read. */
 .viewport__stage {
@@ -732,46 +741,7 @@ body {
   background: var(--line-bright);
 }
 
-/* A series row is a button now, and has to keep the grid it had as a list item. */
-.series__open {
-  display: contents;
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: 0;
-  text-align: left;
-  cursor: pointer;
-}
-
-.series:hover {
-  color: var(--ink);
-}
-
-.series:has(.series__open:disabled) {
-  opacity: 0.45;
-  cursor: default;
-}
-
-/* ---- sending a series to a screen ---------------------------------------- */
-
-.series {
-  /* One more column than before: the screens a series can be sent to. */
-  grid-template-columns: 8ch minmax(0, 1fr) 8ch 13ch 12ch auto;
-}
-
-.series__screens {
-  display: flex;
-  gap: 3px;
-  /* Present but quiet until the row is under the pointer: a worklist of forty
-     series should not read as eighty buttons. */
-  opacity: 0;
-  transition: opacity 120ms ease-out;
-}
-
-.series:hover .series__screens,
-.series__screens:focus-within {
-  opacity: 1;
-}
+/* ---- sending a study to a screen ----------------------------------------- */
 
 .screen {
   font: inherit;

@@ -70,9 +70,9 @@ test('the whole arrangement comes back, newest first', () => {
   layouts = remember(layouts, DESK, 'S3', 0, 2000);
 
   assert.deepEqual(arrangement(layouts, DESK, 3), [
-    { seriesInstanceUid: 'S2', pane: 2 },
-    { seriesInstanceUid: 'S3', pane: 0 },
-    { seriesInstanceUid: 'S1', pane: 1 },
+    { studyInstanceUid: 'S2', pane: 2 },
+    { studyInstanceUid: 'S3', pane: 0 },
+    { studyInstanceUid: 'S1', pane: 1 },
   ]);
 });
 
@@ -122,7 +122,7 @@ test('an entry that would send a window nowhere is dropped, and the rest kept', 
     JSON.stringify({
       desks: {
         [DESK]: {
-          series: {
+          studies: {
             good: { pane: 1, at: 1000 },
             negative: { pane: -1, at: 1000 },
             fractional: { pane: 1.5, at: 1000 },
@@ -136,7 +136,7 @@ test('an entry that would send a window nowhere is dropped, and the rest kept', 
 
   const layouts = load(target);
 
-  assert.deepEqual(Object.keys(layouts.desks[DESK]?.series ?? {}), ['good']);
+  assert.deepEqual(Object.keys(layouts.desks[DESK]?.studies ?? {}), ['good']);
   assert.equal(recall(layouts, DESK, 'good', 3), 1);
 });
 
@@ -147,7 +147,7 @@ test('a desk keeps a bounded number of series, dropping the oldest', () => {
     layouts = remember(layouts, DESK, `S${i}`, i % 3, 1000 + i);
   }
 
-  const kept = Object.keys(layouts.desks[DESK]?.series ?? {}).length;
+  const kept = Object.keys(layouts.desks[DESK]?.studies ?? {}).length;
   assert.ok(kept <= 200, `kept ${kept} series`);
   assert.equal(recall(layouts, DESK, 'S299', 3), 299 % 3, 'the newest should survive');
   assert.equal(recall(layouts, DESK, 'S0', 3), undefined, 'the oldest should not');
@@ -176,10 +176,10 @@ test('arranging on one desk does not copy the other desk onto it', () => {
   let layouts = remember(EMPTY, DESK, 'S1', 2, 1000);
   layouts = remember(layouts, OTHER_DESK, 'S2', 0, 2000);
 
-  assert.deepEqual(arrangement(layouts, OTHER_DESK, 3), [{ seriesInstanceUid: 'S2', pane: 0 }]);
+  assert.deepEqual(arrangement(layouts, OTHER_DESK, 3), [{ studyInstanceUid: 'S2', pane: 0 }]);
   assert.equal(recall(layouts, OTHER_DESK, 'S1', 3), undefined);
   // And the first desk keeps what it had.
-  assert.deepEqual(arrangement(layouts, DESK, 3), [{ seriesInstanceUid: 'S1', pane: 2 }]);
+  assert.deepEqual(arrangement(layouts, DESK, 3), [{ studyInstanceUid: 'S1', pane: 2 }]);
 });
 
 test('a folder opened again moves to the top rather than appearing twice', () => {
@@ -217,4 +217,24 @@ test('a folder list of the wrong shape is ignored rather than trusted', () => {
   );
 
   assert.deepEqual(load(target).recent, ['/studies/a', '/studies/b']);
+});
+
+test('placements written by the version that keyed them by series are let go', () => {
+  // They were keyed by series UID; they are keyed by study UID now, because a
+  // study is what gets sent to a screen. A series UID will never match a study
+  // UID, so keeping them would leave entries that can never be used — and a
+  // file from an older version has to load rather than throw.
+  const target = file(
+    'older.json',
+    JSON.stringify({
+      desks: { [DESK]: { series: { 'a.series.uid': { pane: 1, at: 1000 } } } },
+      recent: ['C:/studies'],
+    })
+  );
+
+  const layouts = load(target);
+
+  assert.deepEqual(Object.keys(layouts.desks[DESK]?.studies ?? {}), []);
+  // What is not about placement survives.
+  assert.deepEqual(layouts.recent, ['C:/studies']);
 });

@@ -277,6 +277,13 @@ if (!app.requestSingleInstanceLock()) {
       mainWindow.webContents.getURL().startsWith(`${VIEWER_SCHEME}://`);
 
     /** A folder a menu asked for while there was no page to ask. Asked once. */
+    /** Whether the screen layout was asked for before this page existed. */
+    ipcMain.handle('view:pending-screens', () => {
+      const asked = wantScreens;
+      wantScreens = false;
+      return asked;
+    });
+
     ipcMain.handle('library:pending', () => {
       const folder = pending;
       pending = undefined;
@@ -377,23 +384,11 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('library:current', () => current);
 
-    /**
-     * Which study a series belongs to.
-     *
-     * The viewer is addressed by study and then told which series to land on,
-     * so sending a series to another screen needs both names. Only the index
-     * knows the pairing, and it is here.
-     */
-    const studyOf = (seriesInstanceUid: string): string | undefined => {
-      for (const patient of current?.index.patients ?? []) {
-        for (const study of patient.studies) {
-          if (study.series.some(one => one.seriesInstanceUid === seriesInstanceUid)) {
-            return study.studyInstanceUid;
-          }
-        }
-      }
-      return undefined;
-    };
+    /** Whether a study is in the folder that is open. */
+    const studyIsOpen = (studyInstanceUid: string): boolean =>
+      (current?.index.patients ?? []).some(patient =>
+        patient.studies.some(study => study.studyInstanceUid === studyInstanceUid)
+      );
 
     /** Who a study belongs to and what it is, for a title bar. */
     const describeStudy = (studyInstanceUid: string): string | undefined => {
@@ -410,56 +405,47 @@ if (!app.requestSingleInstanceLock()) {
       return undefined;
     };
 
-    ipcMain.handle('reading:open', (_event, seriesInstanceUid: unknown, pane: unknown) => {
-      if (typeof seriesInstanceUid !== 'string' || typeof pane !== 'number') {
+    ipcMain.handle('reading:open', (_event, studyInstanceUid: unknown, pane: unknown) => {
+      if (typeof studyInstanceUid !== 'string' || typeof pane !== 'number') {
         return;
       }
 
-      const study = studyOf(seriesInstanceUid);
-      if (!study) {
-        // A series that is not in the folder that is open. The window would come
+      if (!studyIsOpen(studyInstanceUid)) {
+        // A study that is not in the folder that is open. The window would come
         // up on an address the archive answers nothing for, which reads as the
-        // application being broken rather than as the series being gone.
+        // application being broken rather than as the study being gone.
         return;
       }
 
-      reading.open(seriesInstanceUid, study, pane, desk.panes, debug);
-      layouts = remember(layouts, desk.fingerprint, seriesInstanceUid, pane, Date.now());
+      reading.open(studyInstanceUid, pane, desk.panes, debug);
+      layouts = remember(layouts, desk.fingerprint, studyInstanceUid, pane, Date.now());
       save(layoutFile, layouts);
     });
 
-    ipcMain.handle('reading:close', (_event, seriesInstanceUid: unknown) => {
-      if (typeof seriesInstanceUid === 'string') {
-        reading.close(seriesInstanceUid);
+    ipcMain.handle('reading:close', (_event, studyInstanceUid: unknown) => {
+      if (typeof studyInstanceUid === 'string') {
+        reading.close(studyInstanceUid);
       }
     });
 
-    /** Where this desk last had a series, if it had it anywhere it still has. */
-    ipcMain.handle('reading:recall', (_event, seriesInstanceUid: unknown) =>
-      typeof seriesInstanceUid === 'string'
-        ? recall(layouts, desk.fingerprint, seriesInstanceUid, desk.panes.length)
+    /** Where this desk last had a study, if it had it anywhere it still has. */
+    ipcMain.handle('reading:recall', (_event, studyInstanceUid: unknown) =>
+      typeof studyInstanceUid === 'string'
+        ? recall(layouts, desk.fingerprint, studyInstanceUid, desk.panes.length)
         : undefined
     );
 
-    /** Reopens everything this desk remembers, for series the open folder has. */
+    /** Reopens everything this desk remembers, for studies the open folder has. */
     ipcMain.handle('reading:restore', () => {
-      const known = new Set(
-        current?.index.patients.flatMap(patient =>
-          patient.studies.flatMap(study => study.series.map(series => series.seriesInstanceUid))
-        ) ?? []
-      );
-
       let opened = 0;
-      for (const placement of arrangement(layouts, desk.fingerprint, desk.panes.length)) {
-        const study = known.has(placement.seriesInstanceUid)
-          ? studyOf(placement.seriesInstanceUid)
-          : undefined;
 
-        if (study) {
-          reading.open(placement.seriesInstanceUid, study, placement.pane, desk.panes, debug);
+      for (const placement of arrangement(layouts, desk.fingerprint, desk.panes.length)) {
+        if (studyIsOpen(placement.studyInstanceUid)) {
+          reading.open(placement.studyInstanceUid, placement.pane, desk.panes, debug);
           opened++;
         }
       }
+
       return opened;
     });
 
@@ -492,6 +478,9 @@ if (!app.requestSingleInstanceLock()) {
      * the viewer. Every File entry was a message sent into that gap.
      */
     let pending: string | undefined;
+
+    /** Set when the screen layout was asked for while a study was open. */
+    let wantScreens = false;
 
     /**
      * Opens a folder, from wherever the window happens to be.
@@ -673,7 +662,16 @@ if (!app.requestSingleInstanceLock()) {
             readingStudy: showingViewer(),
             backToWorklist: () => void mainWindow?.loadFile(RENDERER),
             closeFolder,
-            showScreens: () => mainWindow?.webContents.send('view:screens'),
+            showScreens: () => {
+              if (showingViewer()) {
+                // Same gap as the File entries: the panel belongs to a page that
+                // does not exist while a study is open.
+                wantScreens = true;
+                void mainWindow?.loadFile(RENDERER);
+                return;
+              }
+              mainWindow?.webContents.send('view:screens');
+            },
             showAbout,
             recent: stillThere(),
             openRecent: openFolder,

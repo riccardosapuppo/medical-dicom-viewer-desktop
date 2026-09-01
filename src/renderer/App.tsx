@@ -45,6 +45,15 @@ export function App(): React.ReactElement {
   const [recent, setRecent] = useState<string[]>([]);
   const library = useLibrary();
 
+  // The screen layout, if a menu asked for it while this page did not exist.
+  useEffect(() => {
+    void window.workstation.pendingScreens().then(asked => {
+      if (asked) {
+        setShowScreens(true);
+      }
+    });
+  }, []);
+
   // The menu is in the main process and the state is here, so the two talk.
   useEffect(() => {
     const stop = [
@@ -112,24 +121,6 @@ export function App(): React.ReactElement {
               Stop
             </button>
           ) : null}
-          {library.state.status === 'ready' ? (
-            <button
-              type="button"
-              className="button"
-              title="Reopen the windows this desk was last arranged with"
-              onClick={() => {
-                void window.workstation.restoreArrangement().then(opened => {
-                  setRestored(
-                    opened > 0
-                      ? `${opened} window${opened === 1 ? '' : 's'} reopened`
-                      : 'nothing remembered for this desk'
-                  );
-                });
-              }}
-            >
-              Restore arrangement
-            </button>
-          ) : null}
           <button type="button" className="button button--primary" onClick={library.open}>
             Open folder
           </button>
@@ -137,13 +128,14 @@ export function App(): React.ReactElement {
       </header>
 
       <Body
-          desk={desk}
+        desk={desk}
         deskKey={changedAt}
         library={library}
         onOpen={open}
         screens={desk?.panes.length ?? 1}
         showScreens={showScreens}
         onLeaveScreens={() => setShowScreens(false)}
+        onRestored={setRestored}
         recent={recent}
         dragging={dragging}
       />
@@ -193,6 +185,7 @@ function Body({
   screens,
   showScreens,
   onLeaveScreens,
+  onRestored,
   recent,
   dragging,
 }: {
@@ -203,10 +196,55 @@ function Body({
   screens: number;
   showScreens: boolean;
   onLeaveScreens: () => void;
+  onRestored: (said: string) => void;
   recent: string[];
   dragging: boolean;
 }): React.ReactElement {
   const { state } = library;
+
+  // Asked for first, and deliberately. This used to come after the worklist, so
+  // with a folder open — which is every time anybody would ask for it — the menu
+  // entry did nothing at all.
+  if (showScreens) {
+    return (
+      <section className="panel panel--centred">
+        {desk ? (
+          <div className="desk">
+            <DeskMap desk={desk} key={deskKey} />
+            <p className="muted desk__caption">
+              {desk.panes.length} {desk.panes.length === 1 ? 'screen is' : 'screens are'} attached.
+              A study sent to one of these opens in a window of its own on that glass, and where
+              you put it is remembered against the fingerprint below — so the same desk gets the
+              same arrangement back, and a different desk gets its own.
+            </p>
+            <div className="desk__actions">
+              <button
+                type="button"
+                className="button"
+                title="Reopen the windows this desk was last arranged with"
+                onClick={() => {
+                  void window.workstation.restoreArrangement().then(opened => {
+                    onRestored(
+                      opened > 0
+                        ? `${opened} window${opened === 1 ? '' : 's'} reopened`
+                        : 'nothing remembered for this desk'
+                    );
+                  });
+                }}
+              >
+                Restore arrangement
+              </button>
+              <button type="button" className="button button--primary" onClick={onLeaveScreens}>
+                Back
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="muted">Reading the desk…</p>
+        )}
+      </section>
+    );
+  }
 
   if (state.status === 'reading') {
     const percent = state.total === 0 ? 0 : Math.round((state.done / state.total) * 100);
@@ -247,28 +285,6 @@ function Body({
     return (
       <section className="panel panel--list">
         <Library reading={state.reading} onOpen={onOpen} screens={screens} />
-      </section>
-    );
-  }
-
-  if (showScreens) {
-    return (
-      <section className="panel panel--centred">
-        {desk ? (
-          <div className="desk">
-            <DeskMap desk={desk} key={deskKey} />
-            <p className="muted desk__caption">
-              {desk.panes.length} {desk.panes.length === 1 ? 'screen' : 'screens'} attached. A
-              series sent to one of these is remembered against the fingerprint below, and comes
-              back on the same glass.
-            </p>
-            <button type="button" className="button" onClick={onLeaveScreens}>
-              Back
-            </button>
-          </div>
-        ) : (
-          <p className="muted">Reading the desk…</p>
-        )}
       </section>
     );
   }

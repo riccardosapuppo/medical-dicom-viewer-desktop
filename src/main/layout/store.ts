@@ -1,5 +1,5 @@
 /**
- * Remembering which screen a series was sent to.
+ * Remembering which screen a study was sent to.
  *
  * Keyed on the desk fingerprint rather than on anything the operating system
  * hands out, for the reason the fingerprint exists at all: screen ids do not
@@ -18,7 +18,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
-/** Where a series was put, on one particular desk. */
+/** Where a study was put, on one particular desk. */
 export interface Placement {
   /** The pane's position in the normalised desk, not any id the system gave it. */
   pane: number;
@@ -27,8 +27,8 @@ export interface Placement {
 }
 
 export interface DeskLayout {
-  /** Series UID to placement. */
-  series: Record<string, Placement>;
+  /** Study UID to placement. */
+  studies: Record<string, Placement>;
 }
 
 export interface Layouts {
@@ -81,8 +81,11 @@ export function load(file: string): Layouts {
       continue;
     }
 
-    const series: Record<string, Placement> = {};
-    for (const [uid, placement] of Object.entries(value.series ?? {})) {
+    // Placements written by an earlier version were keyed by series rather
+    // than by study. They are not read: a series UID will never match a study
+    // UID, so keeping them would only leave entries that can never be used.
+    const studies: Record<string, Placement> = {};
+    for (const [uid, placement] of Object.entries(value.studies ?? {})) {
       // A pane index that is not a whole number, or is negative, would send a
       // window to a screen that cannot exist.
       if (
@@ -92,11 +95,11 @@ export function load(file: string): Layouts {
         typeof placement.at === 'number' &&
         Number.isFinite(placement.at)
       ) {
-        series[uid] = { pane: placement.pane, at: placement.at };
+        studies[uid] = { pane: placement.pane, at: placement.at };
       }
     }
 
-    desks[fingerprint] = { series };
+    desks[fingerprint] = { studies };
   }
 
   const raw = (parsed as Layouts).recent;
@@ -118,7 +121,7 @@ function newest<T extends { at: number }>(entries: Record<string, T>, keep: numb
 }
 
 /**
- * Records that a series was put on a pane.
+ * Records that a study was put on a pane.
  *
  * Returns a new object rather than mutating: the caller holds the memory and
  * decides when it reaches the disk, and a half-applied change that was never
@@ -127,30 +130,30 @@ function newest<T extends { at: number }>(entries: Record<string, T>, keep: numb
 export function remember(
   layouts: Layouts,
   fingerprint: string,
-  seriesInstanceUid: string,
+  studyInstanceUid: string,
   pane: number,
   now: number
 ): Layouts {
-  const desk = layouts.desks[fingerprint] ?? { series: {} };
-  const series = newest(
-    { ...desk.series, [seriesInstanceUid]: { pane, at: now } },
+  const desk = layouts.desks[fingerprint] ?? { studies: {} };
+  const studies = newest(
+    { ...desk.studies, [studyInstanceUid]: { pane, at: now } },
     MAX_SERIES
   );
 
-  const desks = { ...layouts.desks, [fingerprint]: { series } };
+  const desks = { ...layouts.desks, [fingerprint]: { studies } };
 
   // Desks accumulate: a laptop that visits three sites is three desks a week.
   // The oldest go, judged by the most recent thing arranged on each.
   if (Object.keys(desks).length > MAX_DESKS) {
     const withAge = Object.entries(desks).map(([key, value]) => [
       key,
-      { ...value, at: Math.max(0, ...Object.values(value.series).map(p => p.at)) },
+      { ...value, at: Math.max(0, ...Object.values(value.studies).map(p => p.at)) },
     ]) as Array<[string, DeskLayout & { at: number }]>;
 
     const kept = newest(Object.fromEntries(withAge), MAX_DESKS);
     return {
       desks: Object.fromEntries(
-        Object.entries(kept).map(([key, value]) => [key, { series: value.series }])
+        Object.entries(kept).map(([key, value]) => [key, { studies: value.studies }])
       ),
     };
   }
@@ -159,7 +162,7 @@ export function remember(
 }
 
 /**
- * Which pane a series was last on, if this desk remembers it.
+ * Which pane a study was last on, if this desk remembers it.
  *
  * A pane index from a desk with fewer panes than it had is not returned: the
  * arrangement was made on a bigger desk, and opening a window on a screen that
@@ -168,10 +171,10 @@ export function remember(
 export function recall(
   layouts: Layouts,
   fingerprint: string,
-  seriesInstanceUid: string,
+  studyInstanceUid: string,
   paneCount: number
 ): number | undefined {
-  const pane = layouts.desks[fingerprint]?.series[seriesInstanceUid]?.pane;
+  const pane = layouts.desks[fingerprint]?.studies[studyInstanceUid]?.pane;
   return pane !== undefined && pane < paneCount ? pane : undefined;
 }
 
@@ -180,11 +183,11 @@ export function arrangement(
   layouts: Layouts,
   fingerprint: string,
   paneCount: number
-): Array<{ seriesInstanceUid: string; pane: number }> {
-  return Object.entries(layouts.desks[fingerprint]?.series ?? {})
+): Array<{ studyInstanceUid: string; pane: number }> {
+  return Object.entries(layouts.desks[fingerprint]?.studies ?? {})
     .filter(([, placement]) => placement.pane < paneCount)
     .sort((a, b) => b[1].at - a[1].at)
-    .map(([seriesInstanceUid, placement]) => ({ seriesInstanceUid, pane: placement.pane }));
+    .map(([studyInstanceUid, placement]) => ({ studyInstanceUid, pane: placement.pane }));
 }
 
 /**

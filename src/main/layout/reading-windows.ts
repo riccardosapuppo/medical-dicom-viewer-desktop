@@ -23,7 +23,7 @@ import { guardShortcuts, ownTitle } from '../menu';
 import { VIEWER_SCHEME } from '../viewer';
 
 export interface Placed {
-  seriesInstanceUid: string;
+  studyInstanceUid: string;
   pane: number;
 }
 
@@ -32,30 +32,24 @@ export class ReadingWindows {
 
   /** What is open, so it can be written down as the arrangement. */
   get placed(): Placed[] {
-    return [...this.#windows.entries()].map(([seriesInstanceUid, { pane }]) => ({
-      seriesInstanceUid,
+    return [...this.#windows.entries()].map(([studyInstanceUid, { pane }]) => ({
+      studyInstanceUid,
       pane,
     }));
   }
 
-  has(seriesInstanceUid: string): boolean {
-    return this.#windows.has(seriesInstanceUid);
+  has(studyInstanceUid: string): boolean {
+    return this.#windows.has(studyInstanceUid);
   }
 
   /**
-   * Opens a series on a pane, or moves the window that is already showing it.
+   * Opens a study on a pane, or moves the window that is already showing it.
    *
-   * The study is needed as well as the series: the viewer is addressed by study
-   * and then told which series to land on, so a window opened with the series
-   * alone would come up on whatever the study happens to show first.
+   * A study rather than a series: the viewer is addressed by study and decides
+   * what to put up first, which is what it is for. Choosing a series before
+   * anything has been shown is a question nobody can answer.
    */
-  open(
-    seriesInstanceUid: string,
-    studyInstanceUid: string,
-    pane: number,
-    panes: Pane[],
-    debug = false
-  ): void {
+  open(studyInstanceUid: string, pane: number, panes: Pane[], debug = false): void {
     const glass = panes[pane];
     if (!glass) {
       // Asked for a screen that is not there. Doing nothing is right: the
@@ -65,12 +59,12 @@ export class ReadingWindows {
     }
 
     const bounds = boundsForPane(glass);
-    const existing = this.#windows.get(seriesInstanceUid);
+    const existing = this.#windows.get(studyInstanceUid);
 
     if (existing) {
       existing.window.setBounds(bounds);
       existing.window.focus();
-      this.#windows.set(seriesInstanceUid, { window: existing.window, pane });
+      this.#windows.set(studyInstanceUid, { window: existing.window, pane });
       return;
     }
 
@@ -89,7 +83,7 @@ export class ReadingWindows {
     });
 
     window.once('ready-to-show', () => window.show());
-    window.on('closed', () => this.#windows.delete(seriesInstanceUid));
+    window.on('closed', () => this.#windows.delete(studyInstanceUid));
 
     // The same protections the main window has. A window on a reporting monitor
     // is the one somebody is actually reading from, and it was the one where
@@ -109,18 +103,16 @@ export class ReadingWindows {
     // nothing from the main process before it can start: the alternative is a
     // message that may arrive before or after the page is ready.
     const address =
-      `${VIEWER_SCHEME}://app/viewer` +
-      `?StudyInstanceUIDs=${encodeURIComponent(studyInstanceUid)}` +
-      `&initialSeriesInstanceUID=${encodeURIComponent(seriesInstanceUid)}`;
+      `${VIEWER_SCHEME}://app/viewer?StudyInstanceUIDs=${encodeURIComponent(studyInstanceUid)}`;
 
     void window.loadURL(address);
 
-    this.#windows.set(seriesInstanceUid, { window, pane });
+    this.#windows.set(studyInstanceUid, { window, pane });
   }
 
-  close(seriesInstanceUid: string): void {
-    this.#windows.get(seriesInstanceUid)?.window.close();
-    this.#windows.delete(seriesInstanceUid);
+  close(studyInstanceUid: string): void {
+    this.#windows.get(studyInstanceUid)?.window.close();
+    this.#windows.delete(studyInstanceUid);
   }
 
   /** Closes everything. Called when the folder changes, and when the application quits. */

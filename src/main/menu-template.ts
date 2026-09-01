@@ -125,21 +125,9 @@ export function menuTemplate({
     },
 
     {
-      label: '&Edit',
-      submenu: [
-        { role: 'copy' },
-        { role: 'selectAll' },
-      ],
-    },
-
-    {
       label: '&View',
       submenu: [
-        { label: 'Screens…', click: actions.showScreens },
-        { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        { label: 'Screen Layout…', click: actions.showScreens },
         { type: 'separator' },
         { role: 'togglefullscreen' },
         // Only with --debug. Reload is what makes this dangerous rather than

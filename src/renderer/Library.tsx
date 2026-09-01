@@ -39,32 +39,24 @@ export interface Opened {
   series?: Series;
 }
 
-function SeriesRow({
-  series,
-  onOpen,
-  screens,
-}: {
-  series: Series;
-  onOpen: () => void;
-  /** How many panes the desk has, so a series can be sent to one of them. */
-  screens: number;
-}): React.ReactElement {
+/**
+ * One series, as a line of facts.
+ *
+ * Nothing on this row is a control, and that is the point. What the series tell
+ * you is what a study contains before you open it: how many images, how big,
+ * and whether the stack could be put in the order it was cut in. Which one to
+ * read is a question you can only answer while looking at something, and the
+ * viewer is where you look.
+ *
+ * These used to be buttons, and they lit up under the pointer, so the row that
+ * opened a study and the rows that were only describing it were impossible to
+ * tell apart.
+ */
+function SeriesRow({ series }: { series: Series }): React.ReactElement {
   const first = series.instances[0];
-
-  // Every series is openable. This used to refuse compressed pixels, colour
-  // images and palettes, because the renderer that drew them here could not
-  // read any of those. The viewer can: it carries decoders for JPEG, JPEG-LS,
-  // JPEG 2000 and RLE. A hospital CD full of JPEG 2000 used to produce a
-  // worklist that was entirely greyed out; it now opens.
 
   return (
     <li className="series">
-      <button
-        type="button"
-        className="series__open"
-        onClick={onOpen}
-        title="Open this series"
-      >
       <span className="series__number">{series.seriesNumber ?? '--'}</span>
       <span className="series__name">{series.description || 'unnamed series'}</span>
       <span className="series__count">{series.instances.length} img</span>
@@ -80,24 +72,6 @@ function SeriesRow({
         }
       >
         {series.orderedByGeometry ? 'by position' : 'by number'}
-      </span>
-      </button>
-
-      {/* Sending a series to a screen is the whole point of a reading room, and
-          it belongs on the row rather than behind a menu: it is done constantly
-          and always to a particular series. */}
-      <span className="series__screens">
-        {Array.from({ length: screens }, (_, pane) => (
-          <button
-            type="button"
-            key={pane}
-            className="screen"
-            title={`Open this series in its own window on screen ${pane + 1}`}
-            onClick={() => void window.workstation.openOnScreen(series.seriesInstanceUid, pane)}
-          >
-            {pane + 1}
-          </button>
-        ))}
       </span>
     </li>
   );
@@ -140,28 +114,46 @@ function StudyBlock({
         <span className="study__age">{age(patient.birthDate, study.studyDate)}</span>
       </button>
 
-      {/* Separate, and small, because expanding is the rarer thing to want:
-          the series are there to be sent to another screen, not to be read
-          from here. */}
-      <button
-        type="button"
-        className="study__toggle"
-        aria-expanded={open}
-        onClick={() => setOpen(showing => !showing)}
-        title={open ? 'Hide the series' : `Show the ${study.series.length} series`}
-      >
-        {open ? '−' : '+'}
-      </button>
+      <span className="study__aside">
+        {/* Sending a study to a screen is the whole point of a reading room, so
+            it is on the row rather than behind a menu. Numbered, because a
+            screen is a place and the number is where it is on the desk. */}
+        {screens > 1 ? (
+          <span className="study__screens">
+            {Array.from({ length: screens }, (unused, pane) => (
+              <button
+                type="button"
+                key={pane}
+                className="screen"
+                title={`Open this study in its own window on screen ${pane + 1}`}
+                onClick={() =>
+                  void window.workstation.openOnScreen(study.studyInstanceUid, pane)
+                }
+              >
+                {pane + 1}
+              </button>
+            ))}
+          </span>
+        ) : null}
+
+        {/* Small, and separate from the row that opens the study: seeing what is
+            inside is the rarer thing to want, and it must not be mistaken for
+            the way in. */}
+        <button
+          type="button"
+          className="study__toggle"
+          aria-expanded={open}
+          onClick={() => setOpen(showing => !showing)}
+          title={open ? 'Hide the series' : `Show the ${study.series.length} series`}
+        >
+          {open ? '−' : '+'}
+        </button>
+      </span>
 
       {open ? (
         <ul className="series-list">
           {study.series.map(series => (
-            <SeriesRow
-              key={series.seriesInstanceUid}
-              series={series}
-              screens={screens}
-              onOpen={() => onOpen({ patient, study, series })}
-            />
+            <SeriesRow key={series.seriesInstanceUid} series={series} />
           ))}
         </ul>
       ) : null}

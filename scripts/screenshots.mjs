@@ -108,11 +108,11 @@ try {
   const context = browser.contexts()[0];
   let page = context.pages()[0] ?? (await context.waitForEvent('page'));
 
-  await page.waitForSelector('.series__open', { timeout: 180000 });
+  await page.waitForSelector('.study__head', { timeout: 180000 });
   await page.waitForTimeout(1500);
   await shoot(page, 'library');
 
-  await page.click('.series__open');
+  await page.click('.study__head');
   await page.waitForURL(url => url.protocol === 'viewer:', { timeout: 120000 }).catch(() => {});
   page = context.pages().find(one => one.url().startsWith('viewer:')) ?? page;
 

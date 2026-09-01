@@ -97,7 +97,7 @@ test('what a person came for is there either way', () => {
     const said = labels(template(debug));
 
     assert.ok(said.includes('Open Folder…'), 'a folder can be opened');
-    assert.ok(said.includes('Screens…'), 'the screens can be seen');
+    assert.ok(said.includes('Screen Layout…'), 'the screen layout can be seen');
     assert.ok(
       said.some(label => label.startsWith('About ')),
       'the version and the author can be read'

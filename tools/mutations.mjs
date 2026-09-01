@@ -173,8 +173,8 @@ const MUTATIONS = [
   ],
   [
     "src/main/layout/store.ts",
-    "  const desk = layouts.desks[fingerprint] ?? { series: {} };",
-    "  const desk = Object.values(layouts.desks)[0] ?? { series: {} };",
+    "  const desk = layouts.desks[fingerprint] ?? { studies: {} };",
+    "  const desk = Object.values(layouts.desks)[0] ?? { studies: {} };",
     "layout: every desk shares one arrangement",
   ],
   [

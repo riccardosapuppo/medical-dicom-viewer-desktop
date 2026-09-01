@@ -52,15 +52,15 @@ const api = {
   currentReading: (): Promise<unknown> => ipcRenderer.invoke('library:current'),
 
   /** Opens a series in its own window on the given pane of the desk. */
-  openOnScreen: (seriesInstanceUid: string, pane: number): Promise<void> =>
-    ipcRenderer.invoke('reading:open', seriesInstanceUid, pane),
+  openOnScreen: (studyInstanceUid: string, pane: number): Promise<void> =>
+    ipcRenderer.invoke('reading:open', studyInstanceUid, pane),
 
-  closeReading: (seriesInstanceUid: string): Promise<void> =>
-    ipcRenderer.invoke('reading:close', seriesInstanceUid),
+  closeReading: (studyInstanceUid: string): Promise<void> =>
+    ipcRenderer.invoke('reading:close', studyInstanceUid),
 
   /** Which screen this desk last had this series on, if any. */
-  recallScreen: (seriesInstanceUid: string): Promise<number | undefined> =>
-    ipcRenderer.invoke('reading:recall', seriesInstanceUid),
+  recallScreen: (studyInstanceUid: string): Promise<number | undefined> =>
+    ipcRenderer.invoke('reading:recall', studyInstanceUid),
 
   /** Reopens the arrangement this desk remembers. Resolves to how many windows opened. */
   restoreArrangement: (): Promise<number> => ipcRenderer.invoke('reading:restore'),
@@ -90,6 +90,9 @@ const api = {
    * page collects it when it starts.
    */
   pendingFolder: (): Promise<string | undefined> => ipcRenderer.invoke('library:pending'),
+
+  /** Whether the screen layout was asked for while this page did not exist. */
+  pendingScreens: (): Promise<boolean> => ipcRenderer.invoke('view:pending-screens'),
 
   viewerPresent: (): Promise<boolean> => ipcRenderer.invoke('viewer:present'),
 

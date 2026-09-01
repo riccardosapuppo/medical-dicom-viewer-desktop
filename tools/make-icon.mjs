@@ -8,10 +8,16 @@
  * no other use for one. This is fifty lines and the icon is described by the
  * code that draws it.
  *
- * The design is the application's own: the reading-room dark, one amber corner
- * marker of the kind that sits at the edge of a viewport, and a greyscale ramp
- * across the middle, because a greyscale ramp is what this whole program is
- * about.
+ * The design has one job, and it is a job most application icons fail at: to be
+ * recognisable at sixteen pixels, in a taskbar, next to twenty others. What was
+ * here before was a greyscale ramp with a corner marker — a fair description of
+ * what the program does, and at sixteen pixels an unreadable grey smudge that
+ * represented nothing.
+ *
+ * So it is a shape instead: a body in cross-section, light on the reading-room
+ * dark, with the two lungs cut out of it. That silhouette survives being made
+ * small, because it is one bright form on a dark ground, and it says what kind
+ * of program this is without a word.
  *
  *   npm run icon
  */
@@ -68,23 +74,44 @@ function paint(x, y) {
     return [0, 0, 0, 0];
   }
 
-  // The greyscale ramp across the middle: the thing the program does.
-  const band = Math.abs(v - 0.5) < 0.17;
-  if (band) {
-    const grey = Math.round(24 + 210 * Math.min(1, Math.max(0, (u - 0.14) / 0.72)));
-    return [grey, grey, grey, 255];
+  // A viewport with an image in it. Two shapes, both big: a light frame, and a
+  // bright disc inside it. At sixteen pixels that is a square outline with a dot
+  // in the middle, which is legible, and which says "something is being looked
+  // at" — where a cross-section of a chest, tried first, read as a face.
+  const frameInset = 0.24;
+  const frameThick = 0.055;
+
+  const insideFrame =
+    u > frameInset && u < 1 - frameInset && v > frameInset && v < 1 - frameInset;
+  const insideHole =
+    u > frameInset + frameThick &&
+    u < 1 - frameInset - frameThick &&
+    v > frameInset + frameThick &&
+    v < 1 - frameInset - frameThick;
+
+  if (insideFrame && !insideHole) {
+    // The top edge is amber: the colour this application uses for what is live,
+    // and on a frame it reads as the edge that is selected. It is a detail, and
+    // at sixteen pixels it becomes a single warm pixel row rather than
+    // disappearing into something that looks like a mistake.
+    const onTop = v < frameInset + frameThick;
+    return onTop ? [240, 169, 46, 255] : [216, 222, 233, 255];
   }
 
-  // One corner marker, amber, of the kind that sits at the edge of a viewport.
-  const arm = SIZE * 0.13;
-  const thick = SIZE * 0.035;
-  const nearLeft = x > inset + SIZE * 0.07 && x < inset + SIZE * 0.07 + arm;
-  const nearTop = y > inset + SIZE * 0.07 && y < inset + SIZE * 0.07 + arm;
-  const onArm =
-    (nearTop && y < inset + SIZE * 0.07 + thick && nearLeft) ||
-    (nearLeft && x < inset + SIZE * 0.07 + thick && nearTop);
-  if (onArm) {
-    return [240, 169, 46, 255];
+  if (insideHole) {
+    // The image: a disc, brighter at its centre, the way a window on soft
+    // tissue looks.
+    const dx2 = (u - 0.5) / 0.135;
+    const dy2 = (v - 0.5) / 0.135;
+    const r = Math.hypot(dx2, dy2);
+
+    if (r <= 1) {
+      const grey = Math.round(236 - 90 * Math.min(1, r));
+      return [grey, grey, grey, 255];
+    }
+
+    // Inside the frame but outside the image: the black a viewport sits on.
+    return [0, 0, 0, 255];
   }
 
   return [13, 17, 23, 255];
