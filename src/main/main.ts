@@ -78,6 +78,22 @@ const ICON = path.join(__dirname, 'icon.png');
 app.setName('DICOM Workstation');
 
 /**
+ * How Windows identifies this application to itself.
+ *
+ * Without it the taskbar groups windows under whatever ran them and shows that
+ * program's icon, and notifications are attributed to it. Run from source that
+ * program is Electron, which is how somebody trying this out sees an Electron
+ * icon for an application that has one of its own.
+ *
+ * The same string as the application id the installer uses, so an installed
+ * copy and one run from source are the same application as far as the system
+ * is concerned.
+ */
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.riccardosapuppo.dicomworkstation');
+}
+
+/**
  * Developer tools and reload are available only when asked for, by name.
  *
  * They are useful and there is no reason to remove them — only a reason not to
