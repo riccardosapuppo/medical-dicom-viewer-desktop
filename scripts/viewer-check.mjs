@@ -11,6 +11,14 @@
  * shows up as a black rectangle.
  *
  *   node scripts/viewer-check.mjs <folder of studies>
+ *   node scripts/viewer-check.mjs <folder> --packaged
+ *
+ * With --packaged it drives the application electron-builder produced, which is
+ * where packaging mistakes live and nowhere else: the viewer left out of the
+ * archive, a path that worked relative to the project and does not relative to
+ * an installed application, a file the configuration quietly excluded. All of
+ * them look perfect in development and give a blank window to whoever installs
+ * it.
  *
  * It reports what the viewer actually did: whether the study list filled, what
  * the archive was asked for, and anything the page complained about.
@@ -25,27 +33,46 @@ import { chromium } from 'playwright-core';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 9333;
 
-const folder = process.argv[2] ?? path.join(root, 'demo-data');
+const packaged = process.argv.includes('--packaged');
+const folder =
+  process.argv.slice(2).find(argument => !argument.startsWith('--')) ??
+  path.join(root, 'demo-data');
 
 if (!fs.existsSync(folder)) {
   console.error(`No studies at ${folder}. Run: npm run demo-data`);
   process.exit(1);
 }
 
-if (!fs.existsSync(path.join(root, 'dist', 'app', 'viewer', 'index.html'))) {
+if (!packaged && !fs.existsSync(path.join(root, 'dist', 'app', 'viewer', 'index.html'))) {
   console.error('No viewer in the build. Run: npm run viewer, then npm run build');
   process.exit(1);
 }
 
-const electron = path.join(
-  root,
-  'node_modules',
-  'electron',
-  'dist',
-  process.platform === 'win32' ? 'electron.exe' : 'electron'
-);
+const unpacked = path.join(root, 'release', 'win-unpacked', 'DICOM Workstation.exe');
 
-const child = spawn(electron, [root, '--open', folder, `--remote-debugging-port=${PORT}`], {
+if (packaged && !fs.existsSync(unpacked)) {
+  console.error('There is no packaged build. Run: npm run package:dir');
+  process.exit(1);
+}
+
+const executable = packaged
+  ? unpacked
+  : path.join(
+      root,
+      'node_modules',
+      'electron',
+      'dist',
+      process.platform === 'win32' ? 'electron.exe' : 'electron'
+    );
+
+// An installed application is given no project directory: it is the project.
+const args = packaged
+  ? ['--open', folder, `--remote-debugging-port=${PORT}`]
+  : [root, '--open', folder, `--remote-debugging-port=${PORT}`];
+
+console.log(`  driving the ${packaged ? 'packaged build' : 'development build'}`);
+
+const child = spawn(executable, args, {
   cwd: root,
   stdio: 'ignore',
   // Obeyed from the surrounding shell, and Electron then starts as plain Node

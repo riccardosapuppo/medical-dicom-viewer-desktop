@@ -19,7 +19,7 @@
     "icon": "node tools/make-icon.mjs",
     "package": "npm run build && electron-builder --publish never",
     "package:dir": "npm run build && electron-builder --dir --publish never",
-    "check:packaged": "npm run package:dir && node scripts/ui.mjs --packaged",
+    "check:packaged": "npm run package:dir && node scripts/viewer-check.mjs --packaged",
     "viewer": "node tools/get-viewer.mjs",
     "demo-data:drawn": "esbuild tools/make-demo-data.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/make-demo-data.js && node dist/make-demo-data.js",
     "check:viewer": "npm run build && node scripts/viewer-check.mjs"
