@@ -84,6 +84,9 @@ const api = {
    */
   viewerPresent: (): Promise<boolean> => ipcRenderer.invoke('viewer:present'),
 
+  /** What the title bar says, which is not what the document calls itself. */
+  windowTitle: (): Promise<string> => ipcRenderer.invoke('window:current'),
+
   /** Hands this window to the viewer, at a study and a series within it. */
   openInViewer: (study: string, series?: string): Promise<void> =>
     ipcRenderer.invoke('viewer:open', study, series),

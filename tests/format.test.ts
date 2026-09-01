@@ -13,6 +13,7 @@ import { test } from 'node:test';
 import {
   age,
   patientKey,
+  patientLabel,
   readableDate,
   readableSize,
   readableTime,
@@ -99,4 +100,20 @@ test('the same patient always gets the same key', () => {
 
   assert.equal(patientKey(patient), patientKey({ ...patient }));
   assert.notEqual(patientKey(patient), patientKey({ ...patient, patientId: 'DEMO-0002' }));
+});
+
+test('a patient with no name is labelled by the identifier the file does carry', () => {
+  // Public archives blank the name element and leave the identifier. Listing
+  // every such row as "unidentified" reads as a fault in the reader rather than
+  // as the anonymisation it is.
+  assert.equal(
+    patientLabel({ patientId: 'LIDC-IDRI-0001', name: '' }),
+    'Anonymized — LIDC-IDRI-0001'
+  );
+
+  // A name, when there is one, is used as it is. Nothing is invented.
+  assert.equal(patientLabel({ patientId: 'X1', name: 'Rossi^Mario' }), 'Rossi^Mario');
+
+  // Neither: there is genuinely nothing to say.
+  assert.equal(patientLabel({ patientId: '', name: '' }), 'Unidentified');
 });

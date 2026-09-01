@@ -31,6 +31,7 @@ npm run check:viewer       # drives the application until the viewer has drawn a
 npm run mutations          # breaks the code on purpose, checks the tests notice
 npm run package            # an installer for the system you are on
 npm run check:packaged     # the same check, against the packaged build
+npm start -- --debug       # the same application, with reload and developer tools
 ```
 
 `npm run viewer` is the one that takes a while: it fetches the viewer's
@@ -125,11 +126,18 @@ download carries its collection's licence, which is kept next to the images it
 applies to. None of it is committed here: 486 images land in a folder that is
 ignored, so a clone stays small and the licence terms stay simple.
 
-`npm run demo-data:drawn` writes synthetic studies instead — drawn from a
-formula, no connection needed. That is what the tests use, because they need
-something fast, offline and identical every time. It is not what a person is
-shown: a viewer whose only example is a drawn ellipse says nothing about whether
-it reads a study.
+The folder holds these studies and nothing else. Anything else found in it is
+removed, and named as it goes: the application reports whatever is in that folder
+as one library, so an older set left beside these appears as a patient who is not
+part of the demonstration. That is not hypothetical — a synthetic study from a
+previous version sat there for a while, and what it looked like was a viewer with
+a drawn phantom in it.
+
+Synthetic studies still exist, in `tools/demo-study.ts`, and the tests build
+their own from it in a temporary folder. They need something fast, offline and
+identical on every machine. They are not something a person is offered: a viewer
+whose only example is a drawn ellipse says nothing about whether it reads a
+study.
 
 ## Screens, and a desk that remembers
 

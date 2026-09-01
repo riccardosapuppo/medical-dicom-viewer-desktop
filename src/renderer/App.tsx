@@ -22,21 +22,22 @@ export function App(): React.ReactElement {
   const [desk, setDesk] = useState<Desk | undefined>(undefined);
   const [changedAt, setChangedAt] = useState(0);
   const [dragging, setDragging] = useState(false);
-  const [opened, setOpened] = useState<Opened | undefined>(undefined);
-
   /**
-   * Opening a series hands the window to the viewer.
+   * Opening hands the window to the viewer, and this page stops existing.
    *
-   * The address carries the study and the series, so the viewer needs nothing
-   * from this page: no message that might arrive before it is ready, and no
-   * state to keep in step. What is remembered here is only what the title bar
-   * says while the change is happening.
+   * The address carries the study, and the series when one was named, so the
+   * viewer needs nothing from here: no message that might arrive before it is
+   * ready, and no state to keep in step.
+   *
+   * Nothing is remembered about what was opened, deliberately. Keeping it meant
+   * a state change here, and the effect it woke up wrote the title bar one last
+   * time on its way out — over the title the main process had just set to the
+   * study being opened. The window ended up named after the folder.
    */
   const open = (chosen: Opened): void => {
-    setOpened(chosen);
     void window.workstation.openInViewer(
       chosen.study.studyInstanceUid,
-      chosen.series.seriesInstanceUid
+      chosen.series?.seriesInstanceUid
     );
   };
   const [restored, setRestored] = useState<string | undefined>(undefined);
@@ -44,36 +45,24 @@ export function App(): React.ReactElement {
   const [recent, setRecent] = useState<string[]>([]);
   const library = useLibrary();
 
-  // A series belongs to the folder it came from. When the folder changes - by
-  // the dialog, by a drop, by a second launch - the image and the patient name
-  // on screen belong to a study that is no longer open, and leaving them there
-  // shows one patient's identity over another's images.
-  const folderOnScreen =
-    library.state.status === 'ready' ? library.state.reading.folder : undefined;
-  useEffect(() => {
-    setOpened(undefined);
-  }, [folderOnScreen]);
-
   // The menu is in the main process and the state is here, so the two talk.
   useEffect(() => {
     const stop = [
-      window.workstation.onCloseStudy(() => {
-        setOpened(undefined);
-        library.close();
-      }),
+      window.workstation.onCloseStudy(() => library.close()),
       window.workstation.onShowScreens(() => setShowScreens(true)),
     ];
     return () => stop.forEach(off => off());
   }, [library]);
 
-  // The title bar says what is open. With three reading windows on three
-  // screens it is the only thing that tells them apart.
+  // The title bar says which folder is open. Once a study is opened the window
+  // belongs to the viewer, and the main process names it after the study — with
+  // three windows on three screens the title is the only thing that tells them
+  // apart.
   useEffect(() => {
-    const subject =
-      opened?.series.description ||
-      (library.state.status === 'ready' ? tailOfPath(library.state.reading.folder) : '');
-    void window.workstation.setTitle(subject);
-  }, [opened, library.state]);
+    const folder =
+      library.state.status === 'ready' ? tailOfPath(library.state.reading.folder) : '';
+    void window.workstation.setTitle(folder);
+  }, [library.state]);
 
   // Re-asked whenever the worklist changes, because reading a folder puts it
   // at the top of the list.

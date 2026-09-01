@@ -57,7 +57,7 @@ async function main(): Promise<void> {
   const lines: string[] = [''];
 
   for (const patient of result.index.patients) {
-    lines.push(`${patient.name || '(no name)'}   ${patient.patientId}`);
+    lines.push(`${patient.name || `Anonymized — ${patient.patientId}`}   ${patient.patientId}`);
 
     for (const study of patient.studies) {
       lines.push(

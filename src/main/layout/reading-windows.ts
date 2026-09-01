@@ -14,11 +14,12 @@
  */
 import path from 'node:path';
 
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, shell } from 'electron';
 
 import type { Pane } from '../display-topology';
 
 import { boundsForPane } from './panes';
+import { guardShortcuts, ownTitle } from '../menu';
 import { VIEWER_SCHEME } from '../viewer';
 
 export interface Placed {
@@ -48,7 +49,13 @@ export class ReadingWindows {
    * and then told which series to land on, so a window opened with the series
    * alone would come up on whatever the study happens to show first.
    */
-  open(seriesInstanceUid: string, studyInstanceUid: string, pane: number, panes: Pane[]): void {
+  open(
+    seriesInstanceUid: string,
+    studyInstanceUid: string,
+    pane: number,
+    panes: Pane[],
+    debug = false
+  ): void {
     const glass = panes[pane];
     if (!glass) {
       // Asked for a screen that is not there. Doing nothing is right: the
@@ -83,6 +90,20 @@ export class ReadingWindows {
 
     window.once('ready-to-show', () => window.show());
     window.on('closed', () => this.#windows.delete(seriesInstanceUid));
+
+    // The same protections the main window has. A window on a reporting monitor
+    // is the one somebody is actually reading from, and it was the one where
+    // Reload and the developer tools were still reachable — because they were
+    // only ever taken away from the window that opens first.
+    guardShortcuts(window, debug);
+    ownTitle(window);
+
+    window.webContents.setWindowOpenHandler(({ url }) => {
+      if (url.startsWith('https://')) {
+        void shell.openExternal(url);
+      }
+      return { action: 'deny' };
+    });
 
     // The window is told what it is showing through the address, so it needs
     // nothing from the main process before it can start: the alternative is a

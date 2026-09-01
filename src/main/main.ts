@@ -27,7 +27,7 @@ import {
 
 import { describe, readDesk, type Desk } from './display-topology';
 import { Indexer } from './library/indexer-host';
-import { buildMenu, guardShortcuts } from './menu';
+import { buildMenu, guardShortcuts, ownTitle, titleWindow } from './menu';
 import { ReadingWindows } from './layout/reading-windows';
 import { startArchive, type Archive } from './dicomweb/server';
 import { serveViewer, viewerPresent, VIEWER_PRIVILEGES, VIEWER_URL } from './viewer';
@@ -72,13 +72,21 @@ const ICON = path.join(__dirname, 'icon.png');
 app.setName('DICOM Workstation');
 
 /**
- * Developer tools and reload are available only when asked for.
+ * Developer tools and reload are available only when asked for, by name.
  *
  * They are useful and there is no reason to remove them — only a reason not to
  * hand them to somebody reading a study, where Reload is indistinguishable from
- * a crash.
+ * a crash: it throws away the folder, the window and everything on screen, and
+ * there is nothing to undo it with.
+ *
+ * This used to be true whenever the application was not packaged, which meant
+ * every person who ran it from its own source got the debug build — which is
+ * most people who will ever look at it, and the only build the author sees. The
+ * flag has to be asked for:
+ *
+ *   npm start -- --debug
  */
-const debug = process.argv.includes('--debug') || !app.isPackaged;
+const debug = process.argv.includes('--debug');
 
 let mainWindow: BrowserWindow | undefined;
 
@@ -132,6 +140,7 @@ function createWindow(): BrowserWindow {
   // empty frame, which on a dark interface is a white rectangle.
   window.once('ready-to-show', () => window.show());
   guardShortcuts(window, debug);
+  ownTitle(window);
 
   // Forgotten on close, so that nothing later sends to a window that is gone.
   // On macOS the application outlives its window, and every send after that
@@ -257,6 +266,15 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('viewer:present', () => viewerPresent(VIEWER));
 
     /**
+     * What the title bar actually says.
+     *
+     * Asked by the interface check. The page carries a title of its own and the
+     * document's title is not the window's, so reading the document proves
+     * nothing about what somebody sees along the top.
+     */
+    ipcMain.handle('window:current', () => mainWindow?.getTitle() ?? '');
+
+    /**
      * Hands this window over to the viewer, at a study.
      *
      * The address carries both names, so the viewer needs nothing else: the
@@ -274,6 +292,12 @@ if (!app.requestSingleInstanceLock()) {
         (typeof series === 'string'
           ? `&initialSeriesInstanceUID=${encodeURIComponent(series)}`
           : '');
+
+      // Set here rather than left to the page. Once the window is showing the
+      // viewer, nothing in this application is asked what it is looking at any
+      // more, and with three windows on three screens the title bar is the only
+      // thing that tells them apart.
+      titleWindow(mainWindow, describeStudy(study));
 
       void mainWindow.loadURL(address);
     });
@@ -334,6 +358,21 @@ if (!app.requestSingleInstanceLock()) {
       return undefined;
     };
 
+    /** Who a study belongs to and what it is, for a title bar. */
+    const describeStudy = (studyInstanceUid: string): string | undefined => {
+      for (const patient of current?.index.patients ?? []) {
+        for (const study of patient.studies) {
+          if (study.studyInstanceUid === studyInstanceUid) {
+            // The name is blank on anything a public archive published, so the
+            // identifier is what there is to say.
+            const who = patient.name || patient.patientId;
+            return [who, study.description].filter(Boolean).join(' — ') || undefined;
+          }
+        }
+      }
+      return undefined;
+    };
+
     ipcMain.handle('reading:open', (_event, seriesInstanceUid: unknown, pane: unknown) => {
       if (typeof seriesInstanceUid !== 'string' || typeof pane !== 'number') {
         return;
@@ -347,7 +386,7 @@ if (!app.requestSingleInstanceLock()) {
         return;
       }
 
-      reading.open(seriesInstanceUid, study, pane, desk.panes);
+      reading.open(seriesInstanceUid, study, pane, desk.panes, debug);
       layouts = remember(layouts, desk.fingerprint, seriesInstanceUid, pane, Date.now());
       save(layoutFile, layouts);
     });
@@ -380,7 +419,7 @@ if (!app.requestSingleInstanceLock()) {
           : undefined;
 
         if (study) {
-          reading.open(placement.seriesInstanceUid, study, placement.pane, desk.panes);
+          reading.open(placement.seriesInstanceUid, study, placement.pane, desk.panes, debug);
           opened++;
         }
       }
@@ -491,9 +530,7 @@ if (!app.requestSingleInstanceLock()) {
      */
     ipcMain.handle('window:title', (_event, subject: unknown) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setTitle(
-          typeof subject === 'string' && subject ? `${subject} — ${app.name}` : app.name
-        );
+        titleWindow(mainWindow, typeof subject === 'string' && subject ? subject : undefined);
       }
     });
 

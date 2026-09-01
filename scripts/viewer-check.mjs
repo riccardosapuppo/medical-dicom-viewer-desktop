@@ -121,19 +121,43 @@ try {
 
   watch(page);
 
-  // The worklist is the way in: the folder is read, its series are listed, and
-  // opening one hands the window to the viewer. Driving it this way exercises
-  // the path a person takes rather than a shortcut written for the check.
-  await page.waitForSelector('.series__open', { timeout: 120000 });
+  // The worklist is the way in: the folder is read, the studies in it are
+  // listed, and clicking one hands the window to the viewer. Driving it this way
+  // exercises the path a person takes rather than a shortcut written for the
+  // check — and clicking the STUDY is the path, not clicking a series inside it.
+  await page.waitForSelector('.study__head', { timeout: 120000 });
   check('the folder was read into a worklist', true);
 
-  await page.click('.series__open');
+  const patients = await page.$$eval('.patient', nodes => nodes.length);
+  const drawn = await page.$$eval('.patient', nodes =>
+    nodes.some(node => /bianchi|ferrari|rossi/i.test(node.textContent ?? ''))
+  );
+  // The studies are the ones downloaded from the archive. A folder that also
+  // holds an older synthetic set shows a patient who is not part of the
+  // demonstration, which is what happened.
+  check('the studies are the demonstration ones', !drawn, `${patients} patients`);
+
+  await page.click('.study__head');
 
   await page.waitForURL(url => url.protocol === 'viewer:', { timeout: 120000 }).catch(() => {});
   page = context.pages().find(one => one.url().startsWith('viewer:')) ?? page;
   watch(page);
 
-  check('opening a series hands the window to the viewer', page.url().startsWith('viewer:'), page.url());
+  check('opening a study hands the window to the viewer', page.url().startsWith('viewer:'), page.url());
+
+  // The reading surface is a web page carrying a title of its own, and a window
+  // takes its title from the page it shows. Left alone it writes the sibling
+  // project's name, and the word "Web", across a desktop window. The document's
+  // title is not the window's, so it has to be asked for.
+  const bar = await page.evaluate(() =>
+    window.workstation ? window.workstation.windowTitle() : '<no bridge on this page>'
+  );
+  const document_ = await page.evaluate(() => document.title);
+  check(
+    'the title bar is the application, not the page',
+    typeof bar === 'string' && bar.length > 0 && !bar.toLowerCase().includes('web'),
+    `bar "${bar}", document "${document_}"`
+  );
 
   // The viewport, drawn by the viewer from what the archive served it.
   const drew = await page

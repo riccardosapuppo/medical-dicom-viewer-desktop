@@ -154,7 +154,42 @@ test('a study with nothing filled in still renders a row', () => {
 
   const markup = render(reading({ patients: [bare], duplicates: 0 }));
 
-  assert.ok(markup.includes('unidentified'));
+  assert.ok(markup.includes('Unidentified'));
   assert.ok(markup.includes('undated'));
   assert.ok(markup.includes('no description'));
+});
+
+test('a patient the archive anonymised is named by the identifier it left', () => {
+  // This is what a folder from a public archive actually looks like: the name
+  // element blanked, the identifier kept. Reading every one of them as
+  // "unidentified" says the reader failed, when what happened is that the study
+  // was published de-identified.
+  const anonymous = patient({ patientId: 'LIDC-IDRI-0001', name: '' });
+  const markup = render(reading({ patients: [anonymous], duplicates: 0 }));
+
+  assert.ok(markup.includes('LIDC-IDRI-0001'), 'the identifier is shown');
+  assert.ok(markup.includes('Anonymized'), 'and why there is nothing else');
+  assert.equal(markup.includes('>Unidentified<'), false);
+});
+
+test('the identifier is not printed twice', () => {
+  // The label of a de-identified patient is built from the identifier, and on
+  // plenty of real studies the name and the identifier are the same string.
+  // Printing both looks like the reader stuttered.
+  const anonymous = render(
+    reading({ patients: [patient({ patientId: 'LIDC-IDRI-0001', name: '' })], duplicates: 0 })
+  );
+  assert.equal(anonymous.split('LIDC-IDRI-0001').length - 1, 1);
+
+  const same = render(
+    reading({ patients: [patient({ patientId: 'D2-0140', name: 'D2-0140' })], duplicates: 0 })
+  );
+  assert.equal(same.split('D2-0140').length - 1, 1);
+
+  // When it does add something, it is there.
+  const both = render(
+    reading({ patients: [patient({ patientId: 'PAT001', name: 'Rossi^Mario' })], duplicates: 0 })
+  );
+  assert.ok(both.includes('PAT001'));
+  assert.ok(both.includes('Rossi^Mario'));
 });

@@ -22,12 +22,12 @@ let anImage: string;
 let temporary: string | undefined;
 
 before(() => {
-  let folder = path.resolve(process.cwd(), 'demo-data');
-  if (!fs.existsSync(folder)) {
-    temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'dicom-metadata-'));
-    generate(temporary);
-    folder = temporary;
-  }
+  // Made here rather than taken from the machine: a test that reads whatever
+  // somebody happened to download is a test with a different result on every
+  // computer.
+  temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'dicom-metadata-'));
+  generate(temporary);
+  const folder = temporary;
 
   const found: string[] = [];
   const walk = (at: string): void => {

@@ -82,3 +82,22 @@ export function readableSize(bytes: number): string {
 export function patientKey(patient: { patientId: string; name: string }): string {
   return `${patient.patientId}|${patient.name}`;
 }
+
+/**
+ * What to call a patient who has no name.
+ *
+ * Public archives publish studies with the name element blanked and the
+ * identifier left in, so a real folder of them lists every row as
+ * "unidentified" — which reads as a fault in the reader rather than as the
+ * anonymisation it is. The identifier is the only thing the file actually says,
+ * so it is what gets shown, labelled with why there is nothing else.
+ *
+ * Nothing is invented and nothing is written back: the files are a patient's
+ * and this application does not edit them.
+ */
+export function patientLabel(patient: { patientId: string; name: string }): string {
+  if (patient.name) {
+    return patient.name;
+  }
+  return patient.patientId ? `Anonymized — ${patient.patientId}` : 'Unidentified';
+}

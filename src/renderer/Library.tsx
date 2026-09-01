@@ -11,7 +11,7 @@ import React, { useState } from 'react';
 import type { Patient, Series, Study } from '../main/dicom/build-index';
 import type { UnreadableFile } from '../main/dicom/read-header';
 
-import { age, patientKey, readableDate, readableTime } from './format';
+import { age, patientKey, patientLabel, readableDate, readableTime } from './format';
 
 import type { LibraryReading } from './useLibrary';
 
@@ -28,7 +28,15 @@ const SEPARATORS = new RegExp('[' + String.fromCharCode(92, 92) + '/]');
 export interface Opened {
   patient: Patient;
   study: Study;
-  series: Series;
+  /**
+   * Which series to land on, when one was chosen.
+   *
+   * Absent when the study itself was opened, which is the ordinary way in: the
+   * viewer then shows the study and decides what to put up first, which is what
+   * it is for. Naming a series is the exception — sending one to a monitor of
+   * its own.
+   */
+  series?: Series;
 }
 
 function SeriesRow({
@@ -110,7 +118,15 @@ function StudyBlock({
 
   return (
     <article className={open ? 'study study--open' : 'study'}>
-      <button type="button" className="study__head" onClick={() => setOpen(o => !o)}>
+      {/* The study itself opens the study. Having to pick a series first was
+          asking somebody to answer a question they have not been shown yet:
+          which series is the one to read is what the viewer is for. */}
+      <button
+        type="button"
+        className="study__head"
+        onClick={() => onOpen({ patient, study })}
+        title="Open this study"
+      >
         <span className="study__date">
           {readableDate(study.studyDate)}
           <span className="study__time">{readableTime(study.studyTime)}</span>
@@ -122,6 +138,19 @@ function StudyBlock({
         </span>
         <span className="study__accession">{study.accessionNumber}</span>
         <span className="study__age">{age(patient.birthDate, study.studyDate)}</span>
+      </button>
+
+      {/* Separate, and small, because expanding is the rarer thing to want:
+          the series are there to be sent to another screen, not to be read
+          from here. */}
+      <button
+        type="button"
+        className="study__toggle"
+        aria-expanded={open}
+        onClick={() => setOpen(showing => !showing)}
+        title={open ? 'Hide the series' : `Show the ${study.series.length} series`}
+      >
+        {open ? '−' : '+'}
       </button>
 
       {open ? (
@@ -207,8 +236,14 @@ export function Library({
       {patients.map(patient => (
         <section className="patient" key={patientKey(patient)}>
           <header className="patient__head">
-            <h2>{patient.name || 'unidentified'}</h2>
-            <span className="patient__id">{patient.patientId}</span>
+            <h2>{patientLabel(patient)}</h2>
+            {/* Only when it adds something. On a de-identified study the label
+                is built from the identifier, and on plenty of others the name
+                and the identifier are the same string — printing it twice
+                looks like the reader stuttered. */}
+            {patient.patientId && !patientLabel(patient).includes(patient.patientId) ? (
+              <span className="patient__id">{patient.patientId}</span>
+            ) : null}
             {patient.sex ? <span className="patient__sex">{patient.sex}</span> : null}
             <span className="patient__studies">
               {patient.studies.length} stud{patient.studies.length === 1 ? 'y' : 'ies'}

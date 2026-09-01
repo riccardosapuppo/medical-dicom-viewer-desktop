@@ -1,171 +1,83 @@
 /**
- * The menu bar, which is the first thing that says whether this is a product or
- * a development build.
+ * Installing the menu, and keeping a reading window from behaving like a
+ * browser.
  *
- * Electron installs a default menu when an application does not set one. That
- * default is built for developing Electron applications: it carries Reload,
- * Force Reload, Toggle Developer Tools and a Help entry that opens
- * electronjs.org. Shipping it tells anyone who opens the View menu exactly what
- * they are looking at, and Reload in particular is not merely embarrassing —
- * pressed by accident it throws away the folder, the window, and every
- * measurement on screen, with no warning and nothing to undo it.
+ * Electron installs a default menu when an application does not set one, and
+ * that default is built for developing Electron applications: Reload, Force
+ * Reload, Toggle Developer Tools, and a Help entry that opens electronjs.org.
+ * Reload in particular is not merely embarrassing — pressed by accident it
+ * throws away the folder and the window, with nothing to undo it.
  *
- * So the menu is built here, from the commands this application actually has.
- * The developer tools are still reachable, deliberately, when the application is
- * started with --debug: they are useful and there is no reason to remove them,
- * only a reason not to hand them to a radiologist.
+ * The template itself is in menu-template.ts, where a test can read it.
  */
-import { app, Menu, shell, type BrowserWindow, type MenuItemConstructorOptions } from 'electron';
+import { app, Menu, shell, type BrowserWindow } from 'electron';
 
-export interface MenuActions {
-  openFolder: () => void;
-  openFiles: () => void;
-  openSample: () => void;
-  /** Whether the demonstration studies have been downloaded yet. */
-  hasDemoStudies: boolean;
-  closeStudy: () => void;
-  showScreens: () => void;
-  showAbout: () => void;
-  recent: string[];
-  openRecent: (folder: string) => void;
-}
+import { menuTemplate, type MenuActions } from './menu-template';
 
-const BACKSLASH = String.fromCharCode(92);
+export type { MenuActions } from './menu-template';
 
-/** The last two segments of a path, which is the part that identifies a folder. */
-function shortPath(full: string): string {
-  const parts = full.split(BACKSLASH).join('/').split('/').filter(Boolean);
-  if (parts.length <= 2) {
-    return full;
-  }
-  const separator = full.includes(BACKSLASH) ? BACKSLASH : '/';
-  return `…${separator}${parts.slice(-2).join(separator)}`;
-}
+const PROJECT = 'https://github.com/riccardosapuppo/dicom-workstation';
 
-export function buildMenu(actions: MenuActions, debug: boolean): Menu {
-  const onMac = process.platform === 'darwin';
-
-  const recent: MenuItemConstructorOptions[] = actions.recent.length
-    ? [
-        {
-          label: 'Open Recent',
-          submenu: actions.recent.map(folder => ({
-            label: shortPath(folder),
-            // The full path is the useful thing when two folders share a name,
-            // and a menu is too narrow to show it.
-            toolTip: folder,
-            click: () => actions.openRecent(folder),
-          })),
-        },
-      ]
-    : [];
-
-  const template: MenuItemConstructorOptions[] = [
-    ...(onMac
-      ? ([
-          {
-            label: app.name,
-            submenu: [
-              { label: `About ${app.name}`, click: actions.showAbout },
-              { type: 'separator' },
-              { role: 'services' },
-              { type: 'separator' },
-              { role: 'hide' },
-              { role: 'hideOthers' },
-              { role: 'unhide' },
-              { type: 'separator' },
-              { role: 'quit' },
-            ],
-          },
-        ] as MenuItemConstructorOptions[])
-      : []),
-
-    {
-      label: '&File',
-      submenu: [
-        { label: 'Open Folder…', accelerator: 'CmdOrCtrl+O', click: actions.openFolder },
-        { label: 'Open Files…', accelerator: 'CmdOrCtrl+Shift+O', click: actions.openFiles },
-        ...recent,
-        { type: 'separator' },
-        {
-          label: 'Open Demonstration Studies',
-          // Absent until they have been downloaded. An entry that does nothing
-          // reads as a broken application; one that is greyed out reads as
-          // something not set up yet, which is what it is.
-          enabled: actions.hasDemoStudies,
-          click: actions.openSample,
-        },
-        { type: 'separator' },
-        { label: 'Back to Worklist', accelerator: 'CmdOrCtrl+W', click: actions.closeStudy },
-        { type: 'separator' },
-        onMac ? { role: 'close' } : { role: 'quit', label: 'Exit' },
-      ],
-    },
-
-    {
-      label: '&Edit',
-      submenu: [
-        { role: 'copy' },
-        { role: 'selectAll' },
-      ],
-    },
-
-    {
-      label: '&View',
-      submenu: [
-        { label: 'Screens…', click: actions.showScreens },
-        { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
-        // Only with --debug. Reload is what makes this dangerous rather than
-        // merely untidy: it discards the folder, the window and every
-        // measurement on screen, and there is nothing to undo it with.
-        ...(debug
-          ? ([
-              { type: 'separator' },
-              { role: 'reload' },
-              { role: 'forceReload' },
-              { role: 'toggleDevTools' },
-            ] as MenuItemConstructorOptions[])
-          : []),
-      ],
-    },
-
-    {
-      label: '&Window',
-      submenu: onMac
-        ? [{ role: 'minimize' }, { role: 'zoom' }, { type: 'separator' }, { role: 'front' }]
-        : [{ role: 'minimize' }, { role: 'zoom' }],
-    },
-
-    {
-      label: '&Help',
-      submenu: [
-        ...(onMac ? [] : ([{ label: `About ${app.name}`, click: actions.showAbout }] as MenuItemConstructorOptions[])),
-        {
-          label: 'Project on GitHub',
-          click: () => {
-            void shell.openExternal('https://github.com/riccardosapuppo/dicom-workstation');
-          },
-        },
-      ],
-    },
-  ];
-
-  return Menu.buildFromTemplate(template);
+export function buildMenu(
+  actions: Omit<MenuActions, 'openProjectPage'>,
+  debug: boolean
+): Menu {
+  return Menu.buildFromTemplate(
+    menuTemplate({
+      actions: { ...actions, openProjectPage: () => void shell.openExternal(PROJECT) },
+      debug,
+      appName: app.name,
+      onMac: process.platform === 'darwin',
+    })
+  );
 }
 
 /**
- * Stops the keyboard from reaching the things the menu no longer offers.
+ * What each window's title bar should say, kept by the main process.
  *
- * Taking Reload out of the menu does not take it off the keyboard: Ctrl+R,
- * Ctrl+Shift+R and F5 still reload a BrowserWindow, and F12 still opens the
- * developer tools. In a viewer, reload is indistinguishable from a crash — the
- * study closes, the measurements go, and nothing says why.
+ * Weak, so a closed window is forgotten with everything else about it.
  */
+const wanted = new WeakMap<BrowserWindow, string>();
+
+/**
+ * Sets the title bar, and remembers what it was set to.
+ *
+ * A subject is what the window is showing — a folder, a study. Without one it
+ * is the application's name, which is what an empty window should say.
+ */
+export function titleWindow(window: BrowserWindow, subject?: string): void {
+  const title = subject ? `${subject} — ${app.name}` : app.name;
+  wanted.set(window, title);
+  if (!window.isDestroyed()) {
+    window.setTitle(title);
+  }
+}
+
+/**
+ * The title bar says what this application is, not what the page calls itself.
+ *
+ * The reading surface is a web page carrying a <title> of its own, and a window
+ * takes its title from the page it is showing. Here that wrote "Medical DICOM
+ * Viewer (Web)" across the top of a desktop window: the sibling project's name,
+ * and the word "Web", on the application that is not it.
+ *
+ * Refusing the event is not enough on its own — the title still changed, which
+ * is how this was found rather than assumed — so the title is put back as well.
+ * Both, because they fail differently: the refusal stops the flicker, and
+ * setting it back is what actually holds.
+ */
+export function ownTitle(window: BrowserWindow): void {
+  titleWindow(window);
+
+  window.webContents.on('page-title-updated', event => {
+    event.preventDefault();
+    const title = wanted.get(window) ?? app.name;
+    if (!window.isDestroyed() && window.getTitle() !== title) {
+      window.setTitle(title);
+    }
+  });
+}
+
 export function guardShortcuts(window: BrowserWindow, debug: boolean): void {
   if (debug) {
     return;

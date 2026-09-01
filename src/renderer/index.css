@@ -389,6 +389,40 @@ body {
   color: var(--ink);
 }
 
+/* The card is one row: the head takes the width it needs, the toggle sits at
+   the end of it. Before, the head was the whole row and there was nowhere else
+   to click. */
+.study {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.study > .series-list {
+  grid-column: 1 / -1;
+}
+
+.study__toggle {
+  align-self: stretch;
+  padding: 0 14px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint, var(--ink-dim));
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.study__toggle:hover {
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+.study__toggle:focus-visible {
+  outline: 1px solid var(--live);
+  outline-offset: -2px;
+}
+
 .study__head:focus-visible {
   outline: 1px solid var(--live);
   outline-offset: -2px;
@@ -433,7 +467,7 @@ body {
 
 .series {
   display: grid;
-  grid-template-columns: 4ch minmax(0, 1fr) 8ch 11ch minmax(12ch, 22ch);
+  grid-template-columns: 8ch minmax(0, 1fr) 8ch 11ch minmax(12ch, 22ch);
   align-items: baseline;
   gap: 12px;
   padding: 3px 0;
@@ -451,6 +485,9 @@ body {
 
 .series__number {
   text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .series__name {
@@ -719,7 +756,7 @@ body {
 
 .series {
   /* One more column than before: the screens a series can be sent to. */
-  grid-template-columns: 4ch minmax(0, 1fr) 8ch 11ch 12ch auto;
+  grid-template-columns: 8ch minmax(0, 1fr) 8ch 11ch 12ch auto;
 }
 
 .series__screens {

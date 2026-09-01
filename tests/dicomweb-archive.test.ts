@@ -26,19 +26,16 @@ let index: Index;
 let temporary: string | undefined;
 
 /**
- * Studies to serve: the ones already on this machine, or a fresh set.
+ * Studies to serve, made here and thrown away afterwards.
  *
- * The demo folder is not committed, so a run that finds it missing used to skip
- * every test in this file — fourteen skips read as fourteen passes, and the
- * archive would have gone unexercised on every machine but this one. Making the
- * studies when they are absent is a second or two, and it costs nothing on a
- * machine that already has them.
+ * Twice deliberate. These used to be skipped when the demonstration folder was
+ * absent, and fourteen skips read as fourteen passes — the archive went
+ * unexercised on every machine but one. Then they used that folder when it was
+ * there, which made the result depend on what somebody had downloaded: the same
+ * test, two machines, two different studies. Drawn studies are a second or two,
+ * offline, and identical every time.
  */
 function studies(): string {
-  const existing = path.resolve(process.cwd(), 'demo-data');
-  if (fs.existsSync(existing)) {
-    return existing;
-  }
   temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'dicom-archive-'));
   generate(temporary);
   return temporary;
