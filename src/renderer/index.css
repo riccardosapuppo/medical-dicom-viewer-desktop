@@ -467,7 +467,7 @@ body {
 
 .series {
   display: grid;
-  grid-template-columns: 8ch minmax(0, 1fr) 8ch 11ch minmax(12ch, 22ch);
+  grid-template-columns: 8ch minmax(0, 1fr) 8ch 13ch minmax(12ch, 22ch);
   align-items: baseline;
   gap: 12px;
   padding: 3px 0;
@@ -756,7 +756,7 @@ body {
 
 .series {
   /* One more column than before: the screens a series can be sent to. */
-  grid-template-columns: 8ch minmax(0, 1fr) 8ch 11ch 12ch auto;
+  grid-template-columns: 8ch minmax(0, 1fr) 8ch 13ch 12ch auto;
 }
 
 .series__screens {
