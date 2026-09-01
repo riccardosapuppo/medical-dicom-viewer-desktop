@@ -9,6 +9,7 @@
  * arguments to the first and exits, which is also how a study opened from the
  * file manager arrives.
  */
+import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -460,9 +461,24 @@ if (!app.requestSingleInstanceLock()) {
       process.stdout.write(`\n${describe(desk)}\n\n`);
     }
 
-    /** The sample study that ships inside the application. */
-    const sampleFolder = path.join(__dirname, 'sample');
-    ipcMain.handle('library:sample', () => sampleFolder);
+    /**
+     * The demonstration studies, if they have been downloaded.
+     *
+     * Nothing is shipped inside the application any more. What used to be here
+     * was drawn from a formula, and a viewer whose only example is an ellipse
+     * tells somebody nothing about whether it reads a study. `npm run demo-data`
+     * fetches the same acquisitions the web viewer demonstrates — real ones,
+     * de-identified by the archive that publishes them — and this points at
+     * them when they are there and says nothing when they are not.
+     */
+    const demoFolder = app.isPackaged
+      ? undefined
+      : path.join(app.getAppPath(), 'demo-data');
+
+    const demoStudies = (): string | undefined =>
+      demoFolder && existsSync(demoFolder) ? demoFolder : undefined;
+
+    ipcMain.handle('library:sample', () => demoStudies());
 
     ipcMain.handle('library:recent', () => layouts.recent ?? []);
 
@@ -515,7 +531,13 @@ if (!app.requestSingleInstanceLock()) {
             openFiles: () => {
               void chooseFiles().then(folder => folder && openFolder(folder));
             },
-            openSample: () => openFolder(sampleFolder),
+            hasDemoStudies: demoStudies() !== undefined,
+            openSample: () => {
+              const folder = demoStudies();
+              if (folder) {
+                openFolder(folder);
+              }
+            },
             closeStudy: () => mainWindow?.webContents.send('library:close'),
             showScreens: () => mainWindow?.webContents.send('view:screens'),
             showAbout,

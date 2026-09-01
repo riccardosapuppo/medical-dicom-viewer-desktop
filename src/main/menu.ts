@@ -21,6 +21,8 @@ export interface MenuActions {
   openFolder: () => void;
   openFiles: () => void;
   openSample: () => void;
+  /** Whether the demonstration studies have been downloaded yet. */
+  hasDemoStudies: boolean;
   closeStudy: () => void;
   showScreens: () => void;
   showAbout: () => void;
@@ -85,9 +87,16 @@ export function buildMenu(actions: MenuActions, debug: boolean): Menu {
         { label: 'Open Files…', accelerator: 'CmdOrCtrl+Shift+O', click: actions.openFiles },
         ...recent,
         { type: 'separator' },
-        { label: 'Open Sample Study', click: actions.openSample },
+        {
+          label: 'Open Demonstration Studies',
+          // Absent until they have been downloaded. An entry that does nothing
+          // reads as a broken application; one that is greyed out reads as
+          // something not set up yet, which is what it is.
+          enabled: actions.hasDemoStudies,
+          click: actions.openSample,
+        },
         { type: 'separator' },
-        { label: 'Close Study', accelerator: 'CmdOrCtrl+W', click: actions.closeStudy },
+        { label: 'Back to Worklist', accelerator: 'CmdOrCtrl+W', click: actions.closeStudy },
         { type: 'separator' },
         onMac ? { role: 'close' } : { role: 'quit', label: 'Exit' },
       ],

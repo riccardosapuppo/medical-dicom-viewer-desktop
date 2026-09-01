@@ -12,7 +12,7 @@
  * anybody who has none of it — a study that ships inside the application, so
  * the thing can be seen working before it is trusted with anything real.
  */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { tailOfPath } from './format';
 
@@ -33,6 +33,14 @@ export function Start({
   onRecent,
   dragging,
 }: StartProps): React.ReactElement {
+  // Asked once. The studies are downloaded by a command, not while the window
+  // is open, so there is nothing here to keep in step.
+  const [hasDemo, setHasDemo] = useState(false);
+
+  useEffect(() => {
+    void window.workstation.sampleFolder().then(folder => setHasDemo(Boolean(folder)));
+  }, []);
+
   return (
     <section className={dragging ? 'start start--dragging' : 'start'}>
       <div className="start__inner">
@@ -67,11 +75,22 @@ export function Start({
         ) : null}
 
         <p className="start__sample">
-          No DICOM to hand?{' '}
-          <button type="button" className="start__link" onClick={onSample}>
-            Open the sample study
-          </button>{' '}
-          — twenty-four slices that ship with the application, drawn from a formula.
+          {hasDemo ? (
+            <>
+              No DICOM to hand?{' '}
+              <button type="button" className="start__link" onClick={onSample}>
+                Open the demonstration studies
+              </button>{' '}
+              — chest, abdominal and breast acquisitions from The Cancer Imaging
+              Archive, de-identified before publication.
+            </>
+          ) : (
+            <>
+              No DICOM to hand? Run <code>npm run demo-data</code> to download five
+              studies from The Cancer Imaging Archive — the same ones the web viewer
+              shows.
+            </>
+          )}
         </p>
       </div>
     </section>
