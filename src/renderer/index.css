@@ -395,7 +395,12 @@ body {
 .study {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+  /* Centred, not anchored to the top. The row's text carries its own padding
+     and the controls beside it do not, so anchoring both to the top left the
+     buttons sitting a few pixels above the line they belong to. Alignment is
+     per row, and the series below are a row of their own, so nothing else
+     moves. */
+  align-items: center;
 }
 
 /* Everything on the right of a study row: which screen to send it to, and the
@@ -403,8 +408,10 @@ body {
 .study__aside {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding-right: 8px;
+  gap: 8px;
+  /* Room on the right for the scrollbar, which sits over the panel and would
+     otherwise cut into the control nearest the edge. */
+  padding: 0 14px 0 8px;
 }
 
 .study__screens {
@@ -426,8 +433,10 @@ body {
 }
 
 .study__toggle {
-  align-self: stretch;
-  padding: 0 14px;
+  flex: none;
+  width: 22px;
+  padding: 0;
+  text-align: center;
   font: inherit;
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint, var(--ink-dim));
@@ -976,7 +985,9 @@ body {
 /* The way in, said in a word. The row opens the study too, but a row that
    responds to a click without saying so is a row nobody is sure about. */
 .study__go {
-  padding: 3px 12px;
+  flex: none;
+  padding: 2px 12px;
+  line-height: 18px;
   font: inherit;
   font-size: 11px;
   color: var(--ink-dim);

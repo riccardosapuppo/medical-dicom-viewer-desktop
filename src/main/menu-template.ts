@@ -23,7 +23,12 @@ export interface MenuActions {
   closeFolder: () => void;
   /** Puts the windows on the other screens back where this desk had them. */
   restoreArrangement: () => void;
-  /** Whether there is an arrangement to put back, and screens to put it on. */
+  /**
+   * Whether there is more than one screen to arrange anything across.
+   *
+   * With one screen the entry is not offered at all: there is nothing it could
+   * do, and a greyed-out entry is a question nobody can answer.
+   */
   canRestore: boolean;
   showAbout: () => void;
   recent: string[];
@@ -130,15 +135,20 @@ export function menuTemplate({
     {
       label: '&Window',
       submenu: [
-        // Where the windows on the other screens are put back. It belongs in
-        // the menu about windows; it was on the worklist, which is about
-        // studies, and then in a panel of its own that had nothing else in it.
-        {
-          label: 'Restore Arrangement',
-          enabled: actions.canRestore,
-          click: actions.restoreArrangement,
-        },
-        { type: 'separator' },
+        // Only where it can do something. It reopens the windows this desk was
+        // last arranged with, on the screens they were on — so on a machine with
+        // one screen there is nothing to arrange, and an entry greyed out for a
+        // reason nobody can see is worse than no entry. The name says the job
+        // rather than naming a noun somebody has to go and look up.
+        ...(actions.canRestore
+          ? ([
+              {
+                label: 'Reopen Windows on Their Screens',
+                click: actions.restoreArrangement,
+              },
+              { type: 'separator' },
+            ] as MenuItemConstructorOptions[])
+          : []),
         // Zoom is a macOS role — it is what the green button does there. On
         // Windows and Linux it is an entry that does nothing when clicked.
         ...(onMac

@@ -98,7 +98,10 @@ test('what a person came for is there either way', () => {
     const said = labels(template(debug));
 
     assert.ok(said.includes('Open Folder…'), 'a folder can be opened');
-    assert.ok(said.includes('Restore Arrangement'), 'the arrangement can be put back');
+    assert.ok(
+      said.includes('Reopen Windows on Their Screens'),
+      'the windows can be put back where this desk had them'
+    );
     assert.ok(
       said.some(label => label.startsWith('About ')),
       'the version and the author can be read'
@@ -181,4 +184,23 @@ test('closing the folder is a different thing from leaving a study', () => {
   const said = labels(template(false));
   assert.ok(said.includes('Back to Worklist'));
   assert.ok(said.includes('Close Folder'));
+});
+
+test('putting the windows back is offered only where there is somewhere to put them', () => {
+  const entry = (screens: boolean): boolean =>
+    labels(
+      menuTemplate({
+        actions: { ...ACTIONS, canRestore: screens },
+        debug: false,
+        appName: 'x',
+        onMac: false,
+      }) as Item[]
+    ).some(label => label.startsWith('Reopen Windows'));
+
+  assert.equal(entry(true), true);
+
+  // With one screen there is nothing to arrange. Greying the entry out leaves a
+  // question nobody can answer — which is what happened, and what was asked
+  // about.
+  assert.equal(entry(false), false);
 });
