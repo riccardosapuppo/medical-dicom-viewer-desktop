@@ -43,6 +43,7 @@ function frame(fill: (x: number, y: number) => number, partial: Partial<Frame> =
     rescaleIntercept: 0,
     invert: false,
     spacing: { x: 0.5, y: 0.5 },
+    spacingKnown: true,
     ...partial,
   };
 }
@@ -64,17 +65,17 @@ const length = (from: { x: number; y: number }, to: { x: number; y: number }): L
 });
 
 test('a length is in millimetres, not in pixels', () => {
-  const image = { columns: SIZE, rows: SIZE, spacing: { x: 0.5, y: 0.5 } };
+  const image = { columns: SIZE, rows: SIZE, spacing: { x: 0.5, y: 0.5 }, spacingKnown: true };
 
-  assert.equal(lengthOf(length({ x: 0, y: 0 }, { x: 40, y: 0 }), image), 20);
-  assert.equal(lengthOf(length({ x: 10, y: 10 }, { x: 10, y: 30 }), image), 10);
+  assert.deepEqual(lengthOf(length({ x: 0, y: 0 }, { x: 40, y: 0 }), image), { value: 20, unit: 'mm' });
+  assert.deepEqual(lengthOf(length({ x: 10, y: 10 }, { x: 10, y: 30 }), image), { value: 10, unit: 'mm' });
 });
 
 test('a length uses the spacing of the direction it runs in', () => {
-  const image = { columns: SIZE, rows: SIZE, spacing: { x: 1, y: 0.25 } };
+  const image = { columns: SIZE, rows: SIZE, spacing: { x: 1, y: 0.25 }, spacingKnown: true };
 
-  assert.equal(lengthOf(length({ x: 0, y: 0 }, { x: 20, y: 0 }), image), 20);
-  assert.equal(lengthOf(length({ x: 0, y: 0 }, { x: 0, y: 20 }), image), 5);
+  assert.equal(lengthOf(length({ x: 0, y: 0 }, { x: 20, y: 0 }), image).value, 20);
+  assert.equal(lengthOf(length({ x: 0, y: 0 }, { x: 0, y: 20 }), image).value, 5);
 });
 
 test('a region of one value reports that value and no spread', () => {
@@ -213,11 +214,13 @@ test('a region drawn from the bottom right is the same region', () => {
 });
 
 test('lengths and regions are written the way they are read out', () => {
-  assert.equal(describeLength(7.25), '7.3 mm');
-  assert.equal(describeLength(43.6), '4.4 cm');
+  assert.equal(describeLength({ value: 7.25, unit: 'mm' }), '7.3 mm');
+  assert.equal(describeLength({ value: 43.6, unit: 'mm' }), '4.4 cm');
+  // Pixels are never turned into centimetres: the unit is the whole point.
+  assert.equal(describeLength({ value: 137.5, unit: 'px' }), '138 px');
 
   const said = describeStatistics(
-    { count: 100, mean: 45.2, deviation: 12.7, min: -30, max: 210, area: 314 },
+    { count: 100, mean: 45.2, deviation: 12.7, min: -30, max: 210, area: 314, areaUnit: 'mm2' },
     'HU'
   );
   assert.ok(said[0]?.includes('45.2'));
@@ -232,4 +235,15 @@ test('only a CT number has a unit everybody reads the same way', () => {
   assert.equal(unitFor('CT'), 'HU');
   assert.equal(unitFor('MR'), '');
   assert.equal(unitFor('US'), '');
+});
+
+test('a region on an image with no spacing reports an area in pixels', () => {
+  // Square millimetres computed from a spacing the file never gave are a number
+  // that looks like a measurement and is not one.
+  const unmeasurable = frame(() => 100, { spacingKnown: false });
+  const stats = statisticsOf(region({ x: 12, y: 12 }, { x: 32, y: 32 }), unmeasurable);
+
+  assert.equal(stats.areaUnit, 'px');
+  assert.equal(stats.area, stats.count);
+  assert.equal(describeStatistics(stats, 'HU')[2], `${stats.count} px`);
 });

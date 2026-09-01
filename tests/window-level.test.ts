@@ -33,6 +33,7 @@ function layout(partial: Partial<PixelLayout> = {}): PixelLayout {
     photometricInterpretation: 'MONOCHROME2',
     planarConfiguration: undefined,
     pixelSpacing: undefined,
+    spacingIsFromDetector: false,
     rescaleSlope: 1,
     rescaleIntercept: 0,
     windowCenter: undefined,

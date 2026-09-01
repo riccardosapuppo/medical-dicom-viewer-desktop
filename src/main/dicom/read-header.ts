@@ -69,8 +69,17 @@ export interface PixelLayout {
    * Not always equal, and not always present. A viewer that assumes square
    * pixels draws an ultrasound sector as an oval and measures a circle as an
    * ellipse, which is a measurement someone might report.
+   *
+   * Undefined means the file did not say how big a pixel is — and then a length
+   * cannot be given in millimetres at all. A mammogram carries none of this in
+   * (0028,0030); it is in (0018,1164) instead, which is the distance at the
+   * detector rather than in the patient. Where that is all there is, it is used,
+   * and `spacingIsFromDetector` says so, because on a projection image the
+   * difference is the magnification between the patient and the plate.
    */
   pixelSpacing: number[] | undefined;
+  /** True when the spacing came from the detector rather than from the patient. */
+  spacingIsFromDetector: boolean;
 
   /** stored value * slope + intercept = the real measurement. */
   rescaleSlope: number;
@@ -200,10 +209,35 @@ function readableName(raw: string): string {
  * no photometric interpretation. A viewer that treats a missing slope as zero
  * shows a black rectangle and blames the data.
  */
+/**
+ * How big a pixel is, and where that was found.
+ *
+ * (0028,0030) is the distance in the patient and is what a cross-sectional
+ * study carries. A projection image — a radiograph, a mammogram — carries
+ * (0018,1164) instead: the distance at the detector, which is larger than the
+ * distance in the patient by whatever magnification the geometry produced.
+ * Neither is a substitute for the other, but one of them is far better than
+ * assuming a millimetre.
+ */
+function spacingOf(dataSet: dicomParser.DataSet): {
+  value: number[] | undefined;
+  fromDetector: boolean;
+} {
+  const inPatient = decimals(dataSet, 'x00280030', 2);
+  if (inPatient) {
+    return { value: inPatient, fromDetector: false };
+  }
+
+  const atDetector = decimals(dataSet, 'x00181164', 2);
+  return atDetector ? { value: atDetector, fromDetector: true } : { value: undefined, fromDetector: false };
+}
+
 function extractPixels(
   dataSet: dicomParser.DataSet,
   fileSize: number
 ): PixelLayout {
+  const pixelSpacing = spacingOf(dataSet);
+
   const element = dataSet.elements[PIXEL_DATA];
   const dataOffset = element?.dataOffset;
   const dataLength = element?.length;
@@ -221,7 +255,11 @@ function extractPixels(
     photometricInterpretation: text(dataSet, 'x00280004') || 'MONOCHROME2',
     planarConfiguration: dataSet.uint16('x00280006'),
 
-    pixelSpacing: decimals(dataSet, 'x00280030', 2),
+    // Pixel Spacing first, then Imager Pixel Spacing. A radiograph or a
+    // mammogram usually carries only the second: a viewer that reads only the
+    // first measures those at one millimetre per pixel and says nothing.
+    pixelSpacing: pixelSpacing.value,
+    spacingIsFromDetector: pixelSpacing.fromDetector,
 
     rescaleSlope: decimal(dataSet, 'x00281053') ?? 1,
     rescaleIntercept: decimal(dataSet, 'x00281052') ?? 0,

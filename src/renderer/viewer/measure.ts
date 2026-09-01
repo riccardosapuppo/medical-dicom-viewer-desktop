@@ -12,7 +12,7 @@
  * whose answer is known rather than against a screenshot.
  */
 import type { Frame } from './gl-image';
-import { distanceInMillimetres, type ImageSize, type Point } from './transform';
+import { distanceBetween, type Distance, type ImageSize, type Point } from './transform';
 
 export interface Length {
   kind: 'length';
@@ -48,8 +48,9 @@ export interface Statistics {
   deviation: number;
   min: number;
   max: number;
-  /** Square millimetres, when the file says how big a pixel is. */
+  /** The area covered, in square millimetres or in pixels. */
   area: number;
+  areaUnit: 'mm2' | 'px';
 }
 
 /** The stored number at a pixel, as the thing it measures. */
@@ -65,9 +66,9 @@ function valueAt(frame: Frame, x: number, y: number): number {
   return stored * frame.rescaleSlope + frame.rescaleIntercept;
 }
 
-/** The length of a distance measurement, in millimetres. */
-export function lengthOf(measurement: Length, image: ImageSize): number {
-  return distanceInMillimetres(measurement.from, measurement.to, image);
+/** The length of a distance measurement, and what it is measured in. */
+export function lengthOf(measurement: Length, image: ImageSize): Distance {
+  return distanceBetween(measurement.from, measurement.to, image);
 }
 
 /**
@@ -89,7 +90,15 @@ export function statisticsOf(measurement: Region, frame: Frame): Statistics {
   const radiusX = (right - left) / 2;
   const radiusY = (bottom - top) / 2;
 
-  const empty: Statistics = { count: 0, mean: 0, deviation: 0, min: 0, max: 0, area: 0 };
+  const empty: Statistics = {
+    count: 0,
+    mean: 0,
+    deviation: 0,
+    min: 0,
+    max: 0,
+    area: 0,
+    areaUnit: frame.spacingKnown ? 'mm2' : 'px',
+  };
   if (radiusX <= 0 || radiusY <= 0) {
     return empty;
   }
@@ -141,15 +150,23 @@ export function statisticsOf(measurement: Region, frame: Frame): Statistics {
     deviation: Math.sqrt(variance),
     min,
     max,
-    area: count * frame.spacing.x * frame.spacing.y,
+    area: frame.spacingKnown ? count * frame.spacing.x * frame.spacing.y : count,
+    areaUnit: frame.spacingKnown ? 'mm2' : 'px',
   };
 }
 
-/** A length as it would be written on the image. */
-export function describeLength(millimetres: number): string {
-  return millimetres >= 10
-    ? `${(millimetres / 10).toFixed(1)} cm`
-    : `${millimetres.toFixed(1)} mm`;
+/**
+ * A length as it would be written on the image.
+ *
+ * Pixels are never turned into centimetres. A number the file did not support
+ * is written in the unit it was actually measured in, so nobody reads it as a
+ * distance in a patient.
+ */
+export function describeLength({ value, unit }: Distance): string {
+  if (unit === 'px') {
+    return `${Math.round(value)} px`;
+  }
+  return value >= 10 ? `${(value / 10).toFixed(1)} cm` : `${value.toFixed(1)} mm`;
 }
 
 /** A region as it would be written on the image. */
@@ -160,7 +177,9 @@ export function describeStatistics(statistics: Statistics, unit: string): string
   return [
     `${statistics.mean.toFixed(1)} ${String.fromCharCode(177)} ${statistics.deviation.toFixed(1)} ${unit}`,
     `${statistics.min.toFixed(0)} to ${statistics.max.toFixed(0)}`,
-    `${(statistics.area / 100).toFixed(2)} cm2`,
+    statistics.areaUnit === 'mm2'
+      ? `${(statistics.area / 100).toFixed(2)} cm2`
+      : `${statistics.area} px`,
   ];
 }
 

@@ -62,7 +62,12 @@ export function drawMeasurements(
   { measurements, at, frame, view, ratio, unit }: DrawOptions
 ): void {
   const canvas: CanvasSize = { width: context.canvas.width, height: context.canvas.height };
-  const image: ImageSize = { columns: frame.columns, rows: frame.rows, spacing: frame.spacing };
+  const image: ImageSize = {
+    columns: frame.columns,
+    rows: frame.rows,
+    spacing: frame.spacing,
+    spacingKnown: frame.spacingKnown,
+  };
 
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.lineJoin = 'round';

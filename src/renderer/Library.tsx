@@ -9,6 +9,7 @@
 import React, { useState } from 'react';
 
 import type { Patient, Series, Study } from '../main/dicom/build-index';
+import { undrawable } from '../main/dicom/drawable';
 import type { UnreadableFile } from '../main/dicom/read-header';
 
 import { age, patientKey, readableDate, readableTime } from './format';
@@ -29,10 +30,15 @@ function SeriesRow({
   screens: number;
 }): React.ReactElement {
   const first = series.instances[0];
-  // A series with nothing in it, or nothing that can be drawn, is listed but
-  // not opened: a viewport that opens onto an error is worse than a row that
-  // does not respond to a click.
-  const openable = series.instances.some(i => i.pixels.complete && !i.pixels.encapsulated);
+
+  // A series with nothing that can be drawn is listed but not opened: a
+  // viewport that opens onto an error is worse than a row that does not respond
+  // to a click. What it is NOT is silent — the reason goes on the row, where a
+  // hospital CD full of JPEG 2000 would otherwise produce a worklist that is
+  // entirely greyed out and says nothing.
+  const refusals = series.instances.map(instance => undrawable(instance.pixels));
+  const openable = refusals.some(refusal => refusal === undefined);
+  const refusal = openable ? undefined : refusals.find(Boolean);
 
   return (
     <li className="series">
@@ -41,7 +47,7 @@ function SeriesRow({
         className="series__open"
         onClick={onOpen}
         disabled={!openable}
-        title={openable ? 'Open this series' : 'Nothing in this series can be displayed yet'}
+        title={openable ? 'Open this series' : `Not opened: ${refusal?.reason ?? 'nothing to draw'}`}
       >
       <span className="series__number">{series.seriesNumber ?? '--'}</span>
       <span className="series__name">{series.description || 'unnamed series'}</span>
@@ -52,8 +58,16 @@ function SeriesRow({
       {/* Worth saying out loud: a stack ordered by number rather than by
           position is a stack that may be upside down, and the only place that
           can be known is here. */}
-      <span className={series.orderedByGeometry ? 'series__order' : 'series__order series__order--weak'}>
-        {series.orderedByGeometry ? 'by position' : 'by number'}
+      <span
+        className={
+          refusal
+            ? 'series__order series__order--weak'
+            : series.orderedByGeometry
+              ? 'series__order'
+              : 'series__order series__order--weak'
+        }
+      >
+        {refusal ? refusal.reason : series.orderedByGeometry ? 'by position' : 'by number'}
       </span>
       </button>
 

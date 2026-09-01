@@ -420,6 +420,7 @@ export function Viewport({
         columns: frame?.columns ?? 1,
         rows: frame?.rows ?? 1,
         spacing: frame?.spacing ?? { x: 1, y: 1 },
+        spacingKnown: frame?.spacingKnown ?? false,
       },
       viewRef.current
     );

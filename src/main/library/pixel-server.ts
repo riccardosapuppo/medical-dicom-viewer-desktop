@@ -20,6 +20,7 @@ import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 
 import type { Index } from '../dicom/build-index';
+import { undrawable } from '../dicom/drawable';
 import type { PixelLayout } from '../dicom/read-header';
 
 export const SCHEME = 'dicom';
@@ -169,13 +170,14 @@ export class PixelServer {
 
     const { filePath, pixels, frameBytes } = found;
 
-    if (pixels.encapsulated) {
-      return text(
-        415,
-        `The pixels are compressed (${pixels.transferSyntaxUid}) and nothing here decodes them yet.`
-      );
+    const refusal = undrawable(pixels);
+    if (refusal) {
+      // 415 for something this viewer has no code for, 409 for a file that is
+      // not all there. The message names which, because "cannot be displayed"
+      // sends whoever reads it looking in the wrong place.
+      return text(refusal.kind === 'undecodable' ? 415 : 409, `This image is ${refusal.reason}.`);
     }
-    if (!pixels.complete || pixels.dataOffset === undefined) {
+    if (pixels.dataOffset === undefined) {
       return text(409, 'The file stops before the pixel data it declares.');
     }
     // Zero as well as absent: a file declaring SamplesPerPixel 0, or zero rows,

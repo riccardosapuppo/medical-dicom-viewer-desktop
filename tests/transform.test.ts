@@ -12,14 +12,14 @@ import { test } from 'node:test';
 
 import {
   canvasToImage,
-  distanceInMillimetres,
+  distanceBetween,
   imageToCanvas,
   place,
   type ImageSize,
 } from '../src/renderer/viewer/transform';
 
-const SQUARE: ImageSize = { columns: 512, rows: 512, spacing: { x: 0.5, y: 0.5 } };
-const WIDE: ImageSize = { columns: 512, rows: 512, spacing: { x: 1, y: 0.5 } };
+const SQUARE: ImageSize = { columns: 512, rows: 512, spacing: { x: 0.5, y: 0.5 }, spacingKnown: true };
+const WIDE: ImageSize = { columns: 512, rows: 512, spacing: { x: 1, y: 0.5 }, spacingKnown: true };
 const CANVAS = { width: 1000, height: 800 };
 const STILL = { zoom: 1, panX: 0, panY: 0 };
 
@@ -106,12 +106,12 @@ test('a distance is measured in millimetres, across and down separately', () => 
   // 100 pixels across at 1 mm and 100 down at 0.5 mm is not 100 root two
   // millimetres. Using one spacing for both is right on square pixels and
   // wrong by an amount too small to notice and too large to accept.
-  assert.equal(distanceInMillimetres({ x: 0, y: 0 }, { x: 100, y: 0 }, WIDE), 100);
-  assert.equal(distanceInMillimetres({ x: 0, y: 0 }, { x: 0, y: 100 }, WIDE), 50);
-  assert.equal(
-    distanceInMillimetres({ x: 0, y: 0 }, { x: 100, y: 100 }, WIDE),
-    Math.hypot(100, 50)
-  );
+  assert.deepEqual(distanceBetween({ x: 0, y: 0 }, { x: 100, y: 0 }, WIDE), { value: 100, unit: 'mm' });
+  assert.deepEqual(distanceBetween({ x: 0, y: 0 }, { x: 0, y: 100 }, WIDE), { value: 50, unit: 'mm' });
+  assert.deepEqual(distanceBetween({ x: 0, y: 0 }, { x: 100, y: 100 }, WIDE), {
+    value: Math.hypot(100, 50),
+    unit: 'mm',
+  });
 });
 
 test('a distance does not depend on zoom, pan, or the size of the canvas', () => {
@@ -119,9 +119,23 @@ test('a distance does not depend on zoom, pan, or the size of the canvas', () =>
   const a = { x: 100, y: 100 };
   const b = { x: 300, y: 220 };
 
-  assert.equal(
-    distanceInMillimetres(a, b, SQUARE),
-    distanceInMillimetres(a, b, { ...SQUARE })
-  );
-  assert.equal(distanceInMillimetres(a, b, SQUARE), Math.hypot(200 * 0.5, 120 * 0.5));
+  assert.deepEqual(distanceBetween(a, b, SQUARE), distanceBetween(a, b, { ...SQUARE }));
+  assert.equal(distanceBetween(a, b, SQUARE).value, Math.hypot(200 * 0.5, 120 * 0.5));
+});
+
+test('with no pixel spacing a length is in pixels, never in millimetres', () => {
+  // A mammogram carries no spacing in the tag most viewers read. Reporting its
+  // diagonal as "13.8 cm" when the number is a count of pixels is a measurement
+  // somebody could put in a report. Pixels are not useful; they are honest.
+  const unknown: ImageSize = {
+    columns: 512,
+    rows: 512,
+    spacing: { x: 1, y: 1 },
+    spacingKnown: false,
+  };
+
+  assert.deepEqual(distanceBetween({ x: 0, y: 0 }, { x: 30, y: 40 }, unknown), {
+    value: 50,
+    unit: 'px',
+  });
 });

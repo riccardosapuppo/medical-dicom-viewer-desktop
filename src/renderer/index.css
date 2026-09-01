@@ -433,7 +433,7 @@ body {
 
 .series {
   display: grid;
-  grid-template-columns: 4ch minmax(0, 1fr) 8ch 11ch 12ch;
+  grid-template-columns: 4ch minmax(0, 1fr) 8ch 11ch minmax(12ch, 22ch);
   align-items: baseline;
   gap: 12px;
   padding: 3px 0;

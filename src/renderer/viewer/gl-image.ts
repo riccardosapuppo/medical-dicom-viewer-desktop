@@ -29,6 +29,8 @@ export interface Frame {
   invert: boolean;
   /** Millimetres per pixel across and down. Equal unless the scanner says otherwise. */
   spacing: { x: number; y: number };
+  /** False when the file carried no pixel spacing: a length is then in pixels. */
+  spacingKnown: boolean;
 }
 
 export interface View {

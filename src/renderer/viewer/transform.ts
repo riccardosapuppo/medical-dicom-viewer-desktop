@@ -19,8 +19,16 @@ export interface CanvasSize {
 export interface ImageSize {
   columns: number;
   rows: number;
-  /** Millimetres per pixel across and down. */
+  /**
+   * Millimetres per pixel across and down.
+   *
+   * One when the file did not say, so the image is drawn square — but a
+   * distance measured against a made-up spacing is not a distance, which is
+   * what `spacingKnown` is for.
+   */
   spacing: { x: number; y: number };
+  /** False when the file carried no pixel spacing at all. */
+  spacingKnown: boolean;
 }
 
 export interface ViewTransform {
@@ -100,14 +108,34 @@ export function canvasToImage(
   };
 }
 
+/** A measured distance, and what it is a distance in. */
+export interface Distance {
+  value: number;
+  unit: 'mm' | 'px';
+}
+
 /**
- * The distance between two points of the image, in millimetres.
+ * The distance between two points of the image.
+ *
+ * In millimetres when the file said how big a pixel is, and in pixels when it
+ * did not. Not in millimetres either way: a mammogram carries no pixel spacing
+ * in the tag most viewers read, and reporting its diagonal as "13.8 cm" when
+ * the number is really a count of pixels is a measurement somebody could put in
+ * a report. Pixels are not useful, but they are honest, and the difference is
+ * visible at a glance because the unit is written next to the number.
  *
  * Across and down are scaled separately, because they are not always the same.
- * A length measured in pixels and multiplied by one spacing is right on square
- * pixels and wrong on everything else, and it is wrong by an amount too small
- * to notice and too large to accept.
  */
-export function distanceInMillimetres(a: Point, b: Point, image: ImageSize): number {
-  return Math.hypot((b.x - a.x) * image.spacing.x, (b.y - a.y) * image.spacing.y);
+export function distanceBetween(a: Point, b: Point, image: ImageSize): Distance {
+  const across = b.x - a.x;
+  const down = b.y - a.y;
+
+  if (!image.spacingKnown) {
+    return { value: Math.hypot(across, down), unit: 'px' };
+  }
+
+  return {
+    value: Math.hypot(across * image.spacing.x, down * image.spacing.y),
+    unit: 'mm',
+  };
 }

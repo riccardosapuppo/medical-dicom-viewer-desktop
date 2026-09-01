@@ -53,6 +53,7 @@ function header(partial: Partial<InstanceHeader> = {}): InstanceHeader {
       photometricInterpretation: 'MONOCHROME2',
       planarConfiguration: undefined,
       pixelSpacing: [0.7, 0.7],
+      spacingIsFromDetector: false,
       rescaleSlope: 1,
       rescaleIntercept: 0,
       windowCenter: 40,

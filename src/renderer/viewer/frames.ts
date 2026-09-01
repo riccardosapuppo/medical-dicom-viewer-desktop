@@ -82,6 +82,7 @@ function toFrame(slide: Slide, bytes: ArrayBuffer): Frame {
       x: pixels.pixelSpacing?.[1] ?? 1,
       y: pixels.pixelSpacing?.[0] ?? 1,
     },
+    spacingKnown: pixels.pixelSpacing !== undefined,
   };
 }
 

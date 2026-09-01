@@ -211,6 +211,9 @@ export function sliceFrom(volume: Volume, plane: Plane, index: number): Frame {
   const perSlice = columns * rows;
 
   const common = {
+    // Reformatting is refused outright without slice positions, so a cut always
+    // knows how far apart its rows are.
+    spacingKnown: true,
     signed: volume.signed,
     bitsAllocated: volume.bitsAllocated,
     rescaleSlope: volume.rescaleSlope,
