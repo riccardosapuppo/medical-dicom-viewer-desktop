@@ -12,7 +12,17 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, screen, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  protocol,
+  screen,
+  session,
+  shell,
+} from 'electron';
 
 import { describe, readDesk, type Desk } from './display-topology';
 import { Indexer } from './library/indexer-host';
@@ -201,6 +211,30 @@ if (!app.requestSingleInstanceLock()) {
     screen.on('display-metrics-changed', reread);
 
     ipcMain.handle('desk:read', () => desk);
+
+    /**
+     * Nothing leaves this machine.
+     *
+     * This reads a person's studies off a disc that may never have been
+     * connected to anything, and the promise it makes is that opening one does
+     * not tell anybody. A promise kept by nobody happening to add a request is
+     * not a promise, so requests off the machine are refused outright: what is
+     * left is the viewer's own scheme, the pixels, and the archive on loopback.
+     *
+     * It is also what makes the refusal visible. A reference left pointing at a
+     * public network fails here, during a check, instead of silently working on
+     * a developer's machine and failing in a reading room.
+     */
+    const CARRIED = ['viewer:', 'dicom:', 'file:', 'data:', 'blob:', 'devtools:'];
+
+    session.defaultSession.webRequest.onBeforeRequest((details, decide) => {
+      const address = details.url;
+      const scheme = address.slice(0, address.indexOf(':') + 1);
+      const loopback =
+        address.startsWith('http://127.0.0.1:') || address.startsWith('http://localhost:');
+
+      decide({ cancel: !(CARRIED.includes(scheme) || loopback) });
+    });
 
     // Reading a folder happens in a process of its own; everything the window
     // hears about it comes through here.

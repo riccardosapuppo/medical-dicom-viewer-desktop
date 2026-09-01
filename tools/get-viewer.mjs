@@ -119,6 +119,45 @@ for (const entry of fs.readdirSync(output, { withFileTypes: true })) {
   }
 }
 
+/**
+ * Brings the page's outside references inside.
+ *
+ * The viewer's page loads a script or two from a public network. In a browser
+ * that is ordinary; here it is not. This application reads a person's studies
+ * from a disc that may never be connected to anything, and it refuses to make
+ * requests off the machine at all — so a reference left pointing outward is a
+ * feature that quietly does not work, on the machines where it matters most.
+ *
+ * They are fetched once, here, where there is a connection by definition, and
+ * the page is pointed at the copies.
+ */
+const page = path.join(output, 'index.html');
+let html = fs.readFileSync(page, 'utf8');
+
+const external = [...html.matchAll(/(?:src|href)="(https?:\/\/[^"]+)"/g)].map(match => match[1]);
+const unique = [...new Set(external)];
+
+if (unique.length > 0) {
+  const vendor = path.join(output, 'vendor');
+  fs.mkdirSync(vendor, { recursive: true });
+
+  for (const address of unique) {
+    const name = path.basename(new URL(address).pathname) || 'script.js';
+    process.stdout.write(`Fetching ${name} so the application does not have to ask for it.\n`);
+
+    const answer = await fetch(address);
+    if (!answer.ok) {
+      process.stderr.write(`${address} answered ${answer.status}. Nothing was installed.\n`);
+      process.exit(1);
+    }
+
+    fs.writeFileSync(path.join(vendor, name), Buffer.from(await answer.arrayBuffer()));
+    html = html.split(address).join(`/vendor/${name}`);
+  }
+
+  fs.writeFileSync(page, html);
+}
+
 if (!keep) {
   // Several gigabytes of dependencies that have already done their job.
   fs.rmSync(checkout, { recursive: true, force: true });

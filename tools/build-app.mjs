@@ -111,6 +111,40 @@ function copyStatic() {
   for (const name of ['index.html', 'index.css']) {
     fs.copyFileSync(path.join(root, 'src', 'renderer', name), path.join(out, 'renderer', name));
   }
+
+  copyViewer();
+}
+
+/**
+ * Puts the viewer where the built main process expects it.
+ *
+ * It is fetched and built by `npm run viewer`, not kept in this repository, so
+ * it may not be here at all. An application without it still starts and says
+ * what is missing, which is better than a window that goes blank.
+ *
+ * Copied only when it changed. It is thousands of files, and copying them on
+ * every rebuild would turn a two-second build into a slow one for no reason.
+ */
+function copyViewer() {
+  const source = path.join(root, 'viewer-dist');
+  const target = path.join(out, 'viewer');
+
+  if (!fs.existsSync(path.join(source, 'index.html'))) {
+    console.log('no viewer: run `npm run viewer` to fetch and build it');
+    return;
+  }
+
+  const stamp = path.join(target, '.copied-from');
+  const from = String(fs.statSync(path.join(source, 'index.html')).mtimeMs);
+
+  if (fs.existsSync(stamp) && fs.readFileSync(stamp, 'utf8') === from) {
+    return;
+  }
+
+  fs.rmSync(target, { recursive: true, force: true });
+  fs.cpSync(source, target, { recursive: true });
+  fs.writeFileSync(stamp, from);
+  console.log(`viewer: copied from ${path.relative(root, source)}`);
 }
 
 copyStatic();

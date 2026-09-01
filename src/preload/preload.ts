@@ -75,6 +75,16 @@ const api = {
   sampleFolder: (): Promise<string> => ipcRenderer.invoke('library:sample'),
 
   /**
+   * Whether the viewer has been built into this copy.
+   *
+   * It is fetched and built rather than kept in the repository, so a clone that
+   * has not run `npm run viewer` has an application with no reading surface.
+   * Asking lets the opening screen say so, instead of a folder opening onto a
+   * window that goes blank.
+   */
+  viewerPresent: (): Promise<boolean> => ipcRenderer.invoke('viewer:present'),
+
+  /**
    * Says what this window is showing, for the title bar and the task switcher.
    *
    * A title that always reads the product name is one nobody reads, and with
