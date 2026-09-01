@@ -191,7 +191,7 @@ nobody is looking at any more. If the process dies mid-folder the window is told
 which folder was lost, instead of watching a progress bar that will never move
 again.
 
-![The desk](docs/desk.png)
+![The opening screen](docs/start.png)
 
 With no folder open the window shows the desk it is standing on, drawn to scale.
 That is not a placeholder: everything this application does is place windows on
@@ -199,7 +199,12 @@ those panes and put them back where they were, and being able to see the
 arrangement it believes in is what makes that debuggable rather than magic. It
 redraws when a monitor is plugged, unplugged or rescaled — and only when the
 fingerprint actually moves, since the same event also fires for a colour profile
-change, which moves no window.
+change, which moves no window. The picture above is from a machine with one
+screen, which is why there is no desk drawn in it.
+
+The pictures in this file are taken by `node scripts/screenshots.mjs`, driving
+the real application. A README whose pictures are of a version that no longer
+exists is worse than one with no pictures at all.
 
 ## Reading a folder
 
