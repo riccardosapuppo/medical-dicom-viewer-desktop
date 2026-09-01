@@ -141,15 +141,19 @@ study.
 
 ## Screens, and a desk that remembers
 
-Hovering a series in the worklist shows one small button per screen. Pressing one
-opens that series in a window of its own on that pane of glass: no worklist, no
-folder, nothing but the viewer on that study, because that is what a reporting
-monitor is for.
+Hovering a study in the worklist shows one small button per screen. Pressing one
+opens that study in a window of its own on that pane of glass: no worklist, no
+folder, nothing but the viewer, because that is what a reporting monitor is for.
+
+A study rather than a series, deliberately. Which series to read is a question
+you can only answer while looking at something, so the series in the worklist are
+facts about what the study contains and nothing on those rows is a control. The
+study is the thing you click.
 
 ![The worklist](docs/library.png)
 
-Where each series was put is written down against the desk fingerprint, and
-**Restore arrangement** brings the windows back. Keyed on the fingerprint rather
+Where each study was put is written down against the desk fingerprint, and
+**Restore arrangement** — under View, Screen Layout — brings the windows back. Keyed on the fingerprint rather
 than on screen ids for the reason the fingerprint exists: a radiologist who docks
 their laptop in the morning gets the arrangement they left, and the same person
 working from the laptop alone gets a different desk and a different arrangement —
@@ -178,8 +182,17 @@ The viewer has a study list of its own, and this application does not use it as
 the way in. The worklist here does three things that are about the machine rather
 than about reading a study: it reads a folder and reports what was in it, it
 names the files that claimed to be DICOM and would not parse, and it sends a
-series to another screen. Opening a series hands the window to the viewer at that
-study, so there is one list and not two in a row.
+study to another screen. Clicking a study hands the window to the viewer, so
+there is one list and not two in a row.
+
+The archive answers for one folder, so reading another one takes the study on
+screen away from the viewer. The window goes back to the worklist when that
+happens. Without it the viewer fails to fetch a frame and puts up a full-screen
+"session expired" — a sentence about a session this application does not have,
+over a study that was fine a moment ago. The same gap made every File entry do
+nothing while a study was open, because the menu belongs to the main process and
+the worklist belongs to a page that is not loaded then. A folder asked for is
+held and collected by the page when it starts.
 
 ## Where the reading happens
 
@@ -255,7 +268,7 @@ enumeration order deliberately thrown away first.
 
 ## Checking that it works
 
-`npm test` runs 154 tests. `npm run mutations` breaks the code on purpose in 48
+`npm test` runs 155 tests. `npm run mutations` breaks the code on purpose in 48
 places and checks the tests notice; none of them survive. The harness refuses to
 start against a suite that is already failing, and a mutation that will not
 compile is reported as broken rather than counted as caught — a check that cannot
@@ -270,6 +283,11 @@ Four more are aimed at the menu bar, which is the first thing anybody opening
 this looks at and which has been wrong twice. It could not be tested before —
 building a menu needs a running application — so the template is now data, in a
 module that takes nothing from Electron but its types.
+
+The menu has only what this application does. No Edit, because copy and
+select-all on a list of studies do nothing and the entry existed because Electron
+makes one by itself; no page zoom, because the viewer has a tool by that name
+that scales the image rather than the interface.
 
 `npm run check:viewer` is the one that could not be written any other way. It
 opens the application on a folder, waits for the worklist, clicks a series, and
