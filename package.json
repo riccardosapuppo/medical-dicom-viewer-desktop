@@ -38,6 +38,7 @@
     "electron-winstaller@5.4.0": true
   },
   "dependencies": {
+    "dcmjs": "^0.52.0",
     "dicom-parser": "^1.8.21",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
