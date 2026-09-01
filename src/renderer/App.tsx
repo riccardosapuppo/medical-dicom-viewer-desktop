@@ -12,6 +12,7 @@ import React, { useEffect, useState } from 'react';
 import type { Desk } from '../main/display-topology';
 
 import { DeskMap } from './DeskMap';
+import { Start } from './Start';
 import { tailOfPath } from './format';
 import { Library } from './Library';
 import { useLibrary } from './useLibrary';
@@ -23,6 +24,8 @@ export function App(): React.ReactElement {
   const [dragging, setDragging] = useState(false);
   const [opened, setOpened] = useState<Opened | undefined>(undefined);
   const [restored, setRestored] = useState<string | undefined>(undefined);
+  const [showScreens, setShowScreens] = useState(false);
+  const [recent, setRecent] = useState<string[]>([]);
   const library = useLibrary();
 
   // A series belongs to the folder it came from. When the folder changes - by
@@ -34,6 +37,33 @@ export function App(): React.ReactElement {
   useEffect(() => {
     setOpened(undefined);
   }, [folderOnScreen]);
+
+  // The menu is in the main process and the state is here, so the two talk.
+  useEffect(() => {
+    const stop = [
+      window.workstation.onCloseStudy(() => {
+        setOpened(undefined);
+        library.close();
+      }),
+      window.workstation.onShowScreens(() => setShowScreens(true)),
+    ];
+    return () => stop.forEach(off => off());
+  }, [library]);
+
+  // The title bar says what is open. With three reading windows on three
+  // screens it is the only thing that tells them apart.
+  useEffect(() => {
+    const subject =
+      opened?.series.description ||
+      (library.state.status === 'ready' ? tailOfPath(library.state.reading.folder) : '');
+    void window.workstation.setTitle(subject);
+  }, [opened, library.state]);
+
+  // Re-asked whenever the worklist changes, because reading a folder puts it
+  // at the top of the list.
+  useEffect(() => {
+    void window.workstation.recentFolders().then(setRecent);
+  }, [library.state.status]);
 
   useEffect(() => {
     void window.workstation.readDesk().then(setDesk);
@@ -110,6 +140,10 @@ export function App(): React.ReactElement {
           library={library}
           onOpen={setOpened}
           screens={desk?.panes.length ?? 1}
+          showScreens={showScreens}
+          onLeaveScreens={() => setShowScreens(false)}
+          recent={recent}
+          dragging={dragging}
         />
       )}
 
@@ -119,7 +153,14 @@ export function App(): React.ReactElement {
         {restored ? <span className="status__said">{restored}</span> : null}
         <span className="status__spacer" />
         <Tally library={library} />
+        {/* The product, then what it runs on — in that order, and not only the
+            second. A footer that names Electron and never the application is a
+            footer written by somebody thinking about the framework. */}
         <span className="status__muted">
+          {window.workstation.product.name} {window.workstation.product.version} · Developed by{' '}
+          {window.workstation.product.author}
+        </span>
+        <span className="status__muted status__runtime">
           Electron {window.workstation.versions.electron} on {window.workstation.platform}
         </span>
       </footer>
@@ -129,7 +170,9 @@ export function App(): React.ReactElement {
 
 function Where({ state }: { state: ReturnType<typeof useLibrary>['state'] }): React.ReactElement {
   if (state.status === 'empty') {
-    return <p className="masthead__note">No folder open. Drop one anywhere in this window.</p>;
+    // The screen below says what to do, at length. Repeating it here in smaller
+    // grey type is noise.
+    return <p className="masthead__note" />;
   }
 
   const folder = state.status === 'ready' ? state.reading.folder : state.folder;
@@ -147,12 +190,20 @@ function Body({
   library,
   onOpen,
   screens,
+  showScreens,
+  onLeaveScreens,
+  recent,
+  dragging,
 }: {
   desk: Desk | undefined;
   deskKey: number;
   library: ReturnType<typeof useLibrary>;
   onOpen: (opened: Opened) => void;
   screens: number;
+  showScreens: boolean;
+  onLeaveScreens: () => void;
+  recent: string[];
+  dragging: boolean;
 }): React.ReactElement {
   const { state } = library;
 
@@ -199,19 +250,38 @@ function Body({
     );
   }
 
+  if (showScreens) {
+    return (
+      <section className="panel panel--centred">
+        {desk ? (
+          <div className="desk">
+            <DeskMap desk={desk} key={deskKey} />
+            <p className="muted desk__caption">
+              {desk.panes.length} {desk.panes.length === 1 ? 'screen' : 'screens'} attached. A
+              series sent to one of these is remembered against the fingerprint below, and comes
+              back on the same glass.
+            </p>
+            <button type="button" className="button" onClick={onLeaveScreens}>
+              Back
+            </button>
+          </div>
+        ) : (
+          <p className="muted">Reading the desk…</p>
+        )}
+      </section>
+    );
+  }
+
   return (
-    <section className="panel panel--centred">
-      {desk ? (
-        <div className="desk">
-          <DeskMap desk={desk} key={deskKey} />
-          <p className="muted desk__caption">
-            {desk.panes.length} {desk.panes.length === 1 ? 'screen' : 'screens'} attached. Windows
-            will be placed on these, and remembered against the fingerprint below.
-          </p>
-        </div>
-      ) : (
-        <p className="muted">Reading the desk…</p>
-      )}
+    <section className="panel panel--list">
+      <Start
+        onFolder={library.open}
+        onFiles={library.openFiles}
+        onSample={library.openSample}
+        recent={recent}
+        onRecent={library.read}
+        dragging={dragging}
+      />
     </section>
   );
 }

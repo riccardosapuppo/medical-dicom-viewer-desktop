@@ -525,6 +525,29 @@ try {
     console.log(`\n  wrote docs/library.png, docs/viewer.png and docs/reformat.png`);
   }
 
+  // Reload is off the keyboard.
+  //
+  // Taking it out of the menu does not take it off Ctrl+R, and in a viewer a
+  // reload is indistinguishable from a crash: the study closes, the
+  // measurements go, and nothing says why. Checked by marking the page and
+  // seeing whether the mark survives.
+  await page.evaluate(() => {
+    window.__stillHere = true;
+  });
+  await page.keyboard.press('Control+r');
+  await page.waitForTimeout(1500);
+  await page.keyboard.press('F5');
+  await page.waitForTimeout(1500);
+
+  const survived = await page.evaluate(() => window.__stillHere === true);
+  check('reload is off the keyboard', survived, survived ? '' : 'the page reloaded and lost everything');
+
+  // The sample study ships inside the build, so somebody with no DICOM of
+  // their own can still see the thing work.
+  const shipped = path.join(root, 'dist', 'app', 'sample');
+  const slices = fs.existsSync(shipped) ? fs.readdirSync(shipped).length : 0;
+  check('a sample study ships with the application', slices >= 12, `${slices} images`);
+
   check('nothing raised', problems.length === 0, problems.slice(0, 3).join(' | '));
 } finally {
   await browser.close().catch(() => {});

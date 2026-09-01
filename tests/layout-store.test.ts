@@ -12,7 +12,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 
-import { arrangement, EMPTY, load, recall, remember, save } from '../src/main/layout/store';
+import {
+  arrangement,
+  EMPTY,
+  load,
+  recall,
+  remember,
+  rememberFolder,
+  save,
+} from '../src/main/layout/store';
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'dicom-workstation-layout-'));
 after(() => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -172,4 +180,41 @@ test('arranging on one desk does not copy the other desk onto it', () => {
   assert.equal(recall(layouts, OTHER_DESK, 'S1', 3), undefined);
   // And the first desk keeps what it had.
   assert.deepEqual(arrangement(layouts, DESK, 3), [{ seriesInstanceUid: 'S1', pane: 2 }]);
+});
+
+test('a folder opened again moves to the top rather than appearing twice', () => {
+  // A list that shows the same folder four times is a list nobody uses twice.
+  let layouts = rememberFolder(EMPTY, '/studies/a');
+  layouts = rememberFolder(layouts, '/studies/b');
+  layouts = rememberFolder(layouts, '/studies/a');
+
+  assert.deepEqual(layouts.recent, ['/studies/a', '/studies/b']);
+});
+
+test('the list of folders is bounded', () => {
+  let layouts = EMPTY;
+  for (let i = 0; i < 30; i++) {
+    layouts = rememberFolder(layouts, `/studies/${i}`);
+  }
+
+  assert.ok((layouts.recent ?? []).length <= 8, `kept ${(layouts.recent ?? []).length}`);
+  assert.equal(layouts.recent?.[0], '/studies/29', 'the newest should be first');
+});
+
+test('the folders survive a trip through the file', () => {
+  const target = path.join(scratch, 'with-recent.json');
+  const layouts = rememberFolder(remember(EMPTY, DESK, 'S1', 1, 1000), '/studies/a');
+
+  save(target, layouts);
+
+  assert.deepEqual(load(target).recent, ['/studies/a']);
+});
+
+test('a folder list of the wrong shape is ignored rather than trusted', () => {
+  const target = file(
+    'bad-recent.json',
+    JSON.stringify({ desks: {}, recent: ['/studies/a', 42, null, '', '/studies/b'] })
+  );
+
+  assert.deepEqual(load(target).recent, ['/studies/a', '/studies/b']);
 });

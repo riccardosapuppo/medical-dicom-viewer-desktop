@@ -10,6 +10,9 @@
  */
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
+/** Put here by the build, from package.json. */
+declare const __APP_VERSION__: string;
+
 import type { Desk } from '../main/display-topology';
 import type { FromIndexer } from '../main/library/messages';
 
@@ -62,6 +65,37 @@ const api = {
   /** Reopens the arrangement this desk remembers. Resolves to how many windows opened. */
   restoreArrangement: (): Promise<number> => ipcRenderer.invoke('reading:restore'),
 
+  /** Opens the file chooser. Resolves to the folder the chosen files are in. */
+  chooseFiles: (): Promise<string | undefined> => ipcRenderer.invoke('library:chooseFiles'),
+
+  /** The folders opened before, newest first. */
+  recentFolders: (): Promise<string[]> => ipcRenderer.invoke('library:recent'),
+
+  /** Where the study that ships inside the application lives. */
+  sampleFolder: (): Promise<string> => ipcRenderer.invoke('library:sample'),
+
+  /**
+   * Says what this window is showing, for the title bar and the task switcher.
+   *
+   * A title that always reads the product name is one nobody reads, and with
+   * three reading windows open it is the only thing that tells them apart.
+   */
+  setTitle: (subject: string): Promise<void> => ipcRenderer.invoke('window:title', subject),
+
+  /** The menu asked for the study to be closed. */
+  onCloseStudy: (handler: () => void): (() => void) => {
+    const listener = (): void => handler();
+    ipcRenderer.on('library:close', listener);
+    return () => ipcRenderer.off('library:close', listener);
+  },
+
+  /** The menu asked for the screens to be shown. */
+  onShowScreens: (handler: () => void): (() => void) => {
+    const listener = (): void => handler();
+    ipcRenderer.on('view:screens', listener);
+    return () => ipcRenderer.off('view:screens', listener);
+  },
+
   /** A folder the application was asked to open: a command line, or a second launch. */
   onOpenRequest: (handler: (folder: string) => void): (() => void) => {
     const listener = (_event: unknown, folder: string): void => handler(folder);
@@ -84,6 +118,19 @@ const api = {
    * the only place that makes it.
    */
   pathOfDropped: (file: File): string => webUtils.getPathForFile(file),
+
+  /**
+   * The product, as opposed to what it runs on.
+   *
+   * Taken from the packaged application rather than written here twice: a
+   * version that has to be kept in step by hand is a version that will be
+   * wrong.
+   */
+  product: {
+    name: 'DICOM Workstation',
+    version: __APP_VERSION__,
+    author: 'Riccardo Sapuppo',
+  },
 
   platform: process.platform,
   versions: {

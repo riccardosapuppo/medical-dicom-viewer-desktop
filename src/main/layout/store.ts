@@ -34,12 +34,24 @@ export interface DeskLayout {
 export interface Layouts {
   /** Desk fingerprint to what was arranged on it. */
   desks: Record<string, DeskLayout>;
+
+  /**
+   * Folders opened before, newest first.
+   *
+   * Because a reading room opens the same folder every morning, and browsing
+   * for it by hand every morning is the kind of small daily friction that makes
+   * somebody keep using the old software instead.
+   */
+  recent?: string[];
 }
 
 /** Desks worth remembering. Beyond this the least recently touched are dropped. */
 const MAX_DESKS = 24;
 /** Series remembered per desk. A radiologist does not arrange a thousand of them. */
 const MAX_SERIES = 200;
+
+/** How many folders are worth offering. More than this is an archive, not a list. */
+const MAX_RECENT = 8;
 
 export const EMPTY: Layouts = { desks: {} };
 
@@ -87,7 +99,12 @@ export function load(file: string): Layouts {
     desks[fingerprint] = { series };
   }
 
-  return { desks };
+  const raw = (parsed as Layouts).recent;
+  const recent = Array.isArray(raw)
+    ? raw.filter((folder): folder is string => typeof folder === 'string' && folder.length > 0)
+    : [];
+
+  return { desks, ...(recent.length ? { recent: recent.slice(0, MAX_RECENT) } : {}) };
 }
 
 export function save(file: string, layouts: Layouts): void {
@@ -168,4 +185,18 @@ export function arrangement(
     .filter(([, placement]) => placement.pane < paneCount)
     .sort((a, b) => b[1].at - a[1].at)
     .map(([seriesInstanceUid, placement]) => ({ seriesInstanceUid, pane: placement.pane }));
+}
+
+/**
+ * Puts a folder at the top of the list of the ones opened before.
+ *
+ * Moved rather than added when it is already there: a list that shows the same
+ * folder four times is a list nobody uses twice.
+ */
+export function rememberFolder(layouts: Layouts, folder: string): Layouts {
+  if (!folder) {
+    return layouts;
+  }
+  const rest = (layouts.recent ?? []).filter(other => other !== folder);
+  return { ...layouts, recent: [folder, ...rest].slice(0, MAX_RECENT) };
 }

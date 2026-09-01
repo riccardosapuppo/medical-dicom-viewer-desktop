@@ -30,9 +30,16 @@ export type LibraryState =
 
 export interface Library {
   state: LibraryState;
+  /** The folder chooser. */
   open: () => void;
+  /** The file chooser: a study is often handed over as loose files. */
+  openFiles: () => void;
+  /** The study that ships inside the application. */
+  openSample: () => void;
   read: (folder: string) => void;
   cancel: () => void;
+  /** Puts the worklist away without opening anything else. */
+  close: () => void;
 }
 
 export function useLibrary(): Library {
@@ -97,6 +104,23 @@ export function useLibrary(): Library {
     });
   }, [read]);
 
+  const openFiles = useCallback(() => {
+    void window.workstation.chooseFiles().then(folder => {
+      if (folder) {
+        read(folder);
+      }
+    });
+  }, [read]);
+
+  const openSample = useCallback(() => {
+    void window.workstation.sampleFolder().then(read);
+  }, [read]);
+
+  const close = useCallback(() => {
+    wanted.current = undefined;
+    setState({ status: 'empty' });
+  }, []);
+
   const cancel = useCallback(() => {
     wanted.current = undefined;
     void window.workstation.cancelReading();
@@ -107,5 +131,5 @@ export function useLibrary(): Library {
   // Registered after `read` exists so the listener always has the current one.
   useEffect(() => window.workstation.onOpenRequest(read), [read]);
 
-  return { state, open, read, cancel };
+  return { state, open, openFiles, openSample, read, cancel, close };
 }

@@ -12,16 +12,52 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { app, BrowserWindow, dialog, ipcMain, protocol, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, screen, shell } from 'electron';
 
 import { describe, readDesk, type Desk } from './display-topology';
 import { Indexer } from './library/indexer-host';
+import { buildMenu, guardShortcuts } from './menu';
 import { PixelServer, SCHEME } from './library/pixel-server';
 import { ReadingWindows } from './layout/reading-windows';
-import { arrangement, load, recall, remember, save, type Layouts } from './layout/store';
+import {
+  arrangement,
+  load,
+  recall,
+  remember,
+  rememberFolder,
+  save,
+  type Layouts,
+} from './layout/store';
 
 /** Where the built renderer lives, relative to the compiled main process. */
 const RENDERER = path.join(__dirname, 'renderer', 'index.html');
+
+/**
+ * The icon, for the window and the taskbar.
+ *
+ * The packaged application gets its icon from electron-builder, which is why
+ * this was missed: run from source it showed Electron's own, and that is how
+ * most people will first see it.
+ */
+const ICON = path.join(__dirname, 'icon.png');
+
+/**
+ * The name the operating system uses: in the menu bar, in the About entry, in
+ * the window list, and as the folder under which settings are kept.
+ *
+ * Without this it is taken from package.json and reads "dicom-workstation",
+ * which is a repository name, not a product.
+ */
+app.setName('DICOM Workstation');
+
+/**
+ * Developer tools and reload are available only when asked for.
+ *
+ * They are useful and there is no reason to remove them — only a reason not to
+ * hand them to somebody reading a study, where Reload is indistinguishable from
+ * a crash.
+ */
+const debug = process.argv.includes('--debug') || !app.isPackaged;
 
 let mainWindow: BrowserWindow | undefined;
 
@@ -57,7 +93,8 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     backgroundColor: '#0d1117',
     show: false,
-    title: 'DICOM Workstation',
+    icon: ICON,
+    title: app.name,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -73,6 +110,7 @@ function createWindow(): BrowserWindow {
   // Showing the window only once it has something in it avoids the flash of an
   // empty frame, which on a dark interface is a white rectangle.
   window.once('ready-to-show', () => window.show());
+  guardShortcuts(window, debug);
 
   // Forgotten on close, so that nothing later sends to a window that is gone.
   // On macOS the application outlives its window, and every send after that
@@ -172,6 +210,9 @@ if (!app.requestSingleInstanceLock()) {
       if (message.type === 'done') {
         pixels.remember(message.index);
         current = message;
+        layouts = rememberFolder(layouts, message.folder);
+        save(layoutFile, layouts);
+        refreshMenu();
       } else if (message.type === 'failed') {
         pixels.forget();
         current = undefined;
@@ -243,25 +284,134 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('library:cancel', () => indexer.cancel());
 
-    // The dialog belongs to the main process because it belongs to the window:
-    // opened from the page it would be a modal with no owner, which on Windows
+    /**
+     * Asks the renderer to open a folder.
+     *
+     * The window owns what it is showing, so nothing here reads a folder behind
+     * its back: a list that appeared underneath the page cannot be cancelled or
+     * replaced by it. Both the menu and the page go through this.
+     */
+    const openFolder = (folder: string): void => {
+      mainWindow?.webContents.send('library:open', folder);
+    };
+
+    // The dialogs belong to the main process because they belong to the window:
+    // opened from the page they would be modals with no owner, which on Windows
     // is a dialog that can end up behind the application that raised it.
-    ipcMain.handle('library:choose', async () => {
+    const chooseFolder = async (): Promise<string | undefined> => {
       const owner = mainWindow;
       if (!owner) {
         return undefined;
       }
       const { canceled, filePaths } = await dialog.showOpenDialog(owner, {
-        title: 'Open a folder of DICOM studies',
+        title: 'Open a folder of studies',
         properties: ['openDirectory'],
         buttonLabel: 'Read',
       });
       return canceled ? undefined : filePaths[0];
-    });
+    };
+
+    /**
+     * Choosing files rather than a folder.
+     *
+     * A study is often handed over as a handful of files rather than a folder,
+     * and until now there was no way to open one. What comes back is the folder
+     * they are in: the indexer reads folders, and the files somebody picked are
+     * almost always the whole of what is there.
+     */
+    const chooseFiles = async (): Promise<string | undefined> => {
+      const owner = mainWindow;
+      if (!owner) {
+        return undefined;
+      }
+      const { canceled, filePaths } = await dialog.showOpenDialog(owner, {
+        title: 'Open DICOM files',
+        properties: ['openFile', 'multiSelections'],
+        buttonLabel: 'Read',
+        filters: [
+          { name: 'DICOM', extensions: ['dcm', 'dicom', 'ima'] },
+          { name: 'All files', extensions: ['*'] },
+        ],
+      });
+      const first = canceled ? undefined : filePaths[0];
+      return first ? path.dirname(first) : undefined;
+    };
+
+    ipcMain.handle('library:choose', chooseFolder);
+    ipcMain.handle('library:chooseFiles', chooseFiles);
 
     if (process.argv.includes('--print-desk')) {
       process.stdout.write(`\n${describe(desk)}\n\n`);
     }
+
+    /** The sample study that ships inside the application. */
+    const sampleFolder = path.join(__dirname, 'sample');
+    ipcMain.handle('library:sample', () => sampleFolder);
+
+    ipcMain.handle('library:recent', () => layouts.recent ?? []);
+
+    /**
+     * What the window is showing, said where a person looks for it.
+     *
+     * A title bar that always reads the product name is a title bar nobody
+     * reads. With three reading windows open on three screens, it is the only
+     * thing that tells them apart in the task switcher.
+     */
+    ipcMain.handle('window:title', (_event, subject: unknown) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setTitle(
+          typeof subject === 'string' && subject ? `${subject} — ${app.name}` : app.name
+        );
+      }
+    });
+
+    const showAbout = (): void => {
+      const owner = mainWindow;
+      const lines = [
+        `Version ${app.getVersion()}`,
+        'Developed by Riccardo Sapuppo',
+        '',
+        `Electron ${process.versions.electron}`,
+        `Chromium ${process.versions.chrome}`,
+        `Node ${process.versions.node}`,
+      ];
+      const options = {
+        type: 'info' as const,
+        title: `About ${app.name}`,
+        message: app.name,
+        detail: lines.join('\n'),
+        buttons: ['Close'],
+      };
+      if (owner && !owner.isDestroyed()) {
+        void dialog.showMessageBox(owner, options);
+      } else {
+        void dialog.showMessageBox(options);
+      }
+    };
+
+    const refreshMenu = (): void => {
+      Menu.setApplicationMenu(
+        buildMenu(
+          {
+            openFolder: () => {
+              void chooseFolder().then(folder => folder && openFolder(folder));
+            },
+            openFiles: () => {
+              void chooseFiles().then(folder => folder && openFolder(folder));
+            },
+            openSample: () => openFolder(sampleFolder),
+            closeStudy: () => mainWindow?.webContents.send('library:close'),
+            showScreens: () => mainWindow?.webContents.send('view:screens'),
+            showAbout,
+            recent: layouts.recent ?? [],
+            openRecent: openFolder,
+          },
+          debug
+        )
+      );
+    };
+
+    refreshMenu();
 
     mainWindow = createWindow();
 
