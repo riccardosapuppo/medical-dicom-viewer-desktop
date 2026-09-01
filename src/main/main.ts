@@ -276,6 +276,13 @@ if (!app.requestSingleInstanceLock()) {
       !mainWindow.isDestroyed() &&
       mainWindow.webContents.getURL().startsWith(`${VIEWER_SCHEME}://`);
 
+    /** A folder a menu asked for while there was no page to ask. Asked once. */
+    ipcMain.handle('library:pending', () => {
+      const folder = pending;
+      pending = undefined;
+      return folder;
+    });
+
     ipcMain.handle('viewer:present', () => viewerPresent(VIEWER));
 
     /**
@@ -334,6 +341,23 @@ if (!app.requestSingleInstanceLock()) {
       if (message.type === 'done') {
         archive?.serve(message.index);
         current = message;
+
+        /**
+         * A different folder means the study on screen is no longer served.
+         *
+         * The archive answers for one folder, so reading another pulls the study
+         * the viewer is showing out from under it. The viewer then fails to
+         * fetch a frame and puts up a full-screen "session expired" — a sentence
+         * about a session this application does not have, over a study that was
+         * fine a moment ago.
+         *
+         * Guarded here rather than in the menu because a folder can be read from
+         * several places: a menu, a folder dropped on the window, a second
+         * launch, the command line. This is the one place they all pass through.
+         */
+        if (showingViewer()) {
+          void mainWindow?.loadFile(RENDERER);
+        }
         layouts = rememberFolder(layouts, message.folder);
         save(layoutFile, layouts);
         refreshMenu();
@@ -460,8 +484,55 @@ if (!app.requestSingleInstanceLock()) {
      * its back: a list that appeared underneath the page cannot be cancelled or
      * replaced by it. Both the menu and the page go through this.
      */
+    /**
+     * A folder asked for by a menu, held until there is a page to hand it to.
+     *
+     * The menu belongs to the main process and the worklist belongs to a page,
+     * and while a study is open that page does not exist — the window is showing
+     * the viewer. Every File entry was a message sent into that gap.
+     */
+    let pending: string | undefined;
+
+    /**
+     * Opens a folder, from wherever the window happens to be.
+     *
+     * If a study is open the window goes back to the worklist first. Not for
+     * tidiness: the archive serves one folder, so reading another one pulls the
+     * study the viewer is showing out from under it, and the viewer then fails
+     * to fetch a frame and puts up a full-screen "session expired" — a sentence
+     * about a session this application does not have, over a study that was
+     * fine a moment ago.
+     */
     const openFolder = (folder: string): void => {
-      mainWindow?.webContents.send('library:open', folder);
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+      }
+
+      if (showingViewer()) {
+        // Held rather than sent: the page asks for it when it starts, so there
+        // is no race between a message and a listener that is not registered
+        // yet.
+        pending = folder;
+        void mainWindow.loadFile(RENDERER);
+        return;
+      }
+
+      mainWindow.webContents.send('library:open', folder);
+    };
+
+    /** Closes the folder, from wherever the window happens to be. */
+    const closeFolder = (): void => {
+      pending = undefined;
+      current = undefined;
+      archive?.serve({ patients: [], duplicates: 0 });
+      reading.closeAll();
+
+      if (showingViewer()) {
+        void mainWindow?.loadFile(RENDERER);
+        return;
+      }
+
+      mainWindow?.webContents.send('library:close');
     };
 
     // The dialogs belong to the main process because they belong to the window:
@@ -601,12 +672,7 @@ if (!app.requestSingleInstanceLock()) {
             },
             readingStudy: showingViewer(),
             backToWorklist: () => void mainWindow?.loadFile(RENDERER),
-            closeFolder: () => {
-              if (showingViewer()) {
-                void mainWindow?.loadFile(RENDERER);
-              }
-              mainWindow?.webContents.send('library:close');
-            },
+            closeFolder,
             showScreens: () => mainWindow?.webContents.send('view:screens'),
             showAbout,
             recent: stillThere(),

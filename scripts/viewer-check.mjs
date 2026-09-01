@@ -25,6 +25,7 @@
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -69,6 +70,15 @@ const executable = packaged
 const args = packaged
   ? ['--open', folder, `--remote-debugging-port=${PORT}`]
   : [root, '--open', folder, `--remote-debugging-port=${PORT}`];
+
+// A second folder, made from one collection of the first, so reading it is
+// quick and the index it produces is genuinely different.
+const elsewhere = path.join(os.tmpdir(), 'dicom-workstation-second-folder');
+
+fs.rmSync(elsewhere, { recursive: true, force: true });
+for (const collection of fs.readdirSync(folder).slice(0, 1)) {
+  fs.cpSync(path.join(folder, collection), path.join(elsewhere, collection), { recursive: true });
+}
 
 console.log(`  driving the ${packaged ? 'packaged build' : 'development build'}`);
 
@@ -222,9 +232,40 @@ try {
     .catch(() => 0);
 
   check('coming back shows the folder that is still open', listed > 0, `${listed} studies`);
+
+  // Reading a different folder while a study is open. The archive answers for
+  // one folder, so this pulls the study on screen out from under the viewer,
+  // which then fails to fetch a frame and puts up a full-screen "session
+  // expired" — a sentence about a session this application does not have, over
+  // a study that was fine a moment ago. It is what somebody hits the first time
+  // they open a second folder, and it took a person to find it.
+  await page.click('.study__head');
+  await page.waitForURL(url => url.protocol === 'viewer:', { timeout: 120000 }).catch(() => {});
+  page = context.pages().find(one => one.url().startsWith('viewer:')) ?? page;
+
+  await page
+    .waitForFunction(
+      () => {
+        const canvas = document.querySelector('canvas');
+        return canvas instanceof HTMLCanvasElement && canvas.width > 0;
+      },
+      { timeout: 180000 }
+    )
+    .catch(() => {});
+
+  await page.evaluate(where => window.workstation.readFolder(where), elsewhere);
+  await page.waitForTimeout(6000);
+
+  const overlay = await page.evaluate(() => {
+    const found = document.getElementById('error-overlay');
+    return found ? (found.textContent ?? '').trim() : '';
+  });
+
+  check('a second folder does not strand the viewer', overlay === '', overlay);
 } finally {
   await browser.close().catch(() => {});
   child.kill();
+  fs.rmSync(elsewhere, { recursive: true, force: true });
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);

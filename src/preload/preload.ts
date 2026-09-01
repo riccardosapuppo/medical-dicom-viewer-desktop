@@ -82,6 +82,15 @@ const api = {
    * Asking lets the opening screen say so, instead of a folder opening onto a
    * window that goes blank.
    */
+  /**
+   * A folder a menu asked for while this page did not exist.
+   *
+   * The menu belongs to the main process; the worklist belongs to here. While a
+   * study is open there is no page to send to, so the request waits and this
+   * page collects it when it starts.
+   */
+  pendingFolder: (): Promise<string | undefined> => ipcRenderer.invoke('library:pending'),
+
   viewerPresent: (): Promise<boolean> => ipcRenderer.invoke('viewer:present'),
 
   /** What the title bar says, which is not what the document calls itself. */

@@ -50,34 +50,6 @@ export function useLibrary(): Library {
   // would swap the list back to the folder the user just left.
   const wanted = useRef<string | undefined>(undefined);
 
-  /**
-   * The folder that is already open, asked for once when this page starts.
-   *
-   * The page is loaded fresh every time the window comes back from the viewer,
-   * and without this it came back to the opening screen — the folder still
-   * open, the archive still serving it, and the worklist showing nothing. What
-   * that looks like is an application that lost the study you were reading.
-   */
-  useEffect(() => {
-    let stillHere = true;
-
-    void window.workstation.currentReading().then(current => {
-      const reading = current as LibraryReading | undefined;
-      if (!stillHere || !reading || wanted.current !== undefined) {
-        // Nothing open, or somebody picked a folder while this was in flight.
-        // The folder they just chose wins over the one that was already there.
-        return;
-      }
-
-      wanted.current = reading.folder;
-      setState({ status: 'ready', reading });
-    });
-
-    return () => {
-      stillHere = false;
-    };
-  }, []);
-
   useEffect(
     () =>
       window.workstation.onLibrary(message => {
@@ -124,6 +96,43 @@ export function useLibrary(): Library {
     void window.workstation.readFolder(folder);
   }, []);
 
+  /**
+   * The folder that is already open, asked for once when this page starts.
+   *
+   * The page is loaded fresh every time the window comes back from the viewer,
+   * and without this it came back to the opening screen — the folder still
+   * open, the archive still serving it, and the worklist showing nothing. What
+   * that looks like is an application that lost the study you were reading.
+   */
+  useEffect(() => {
+    let stillHere = true;
+
+    void (async () => {
+      // A folder a menu asked for while this page did not exist comes first: it
+      // is what somebody just asked for, and it replaces whatever was open.
+      const asked = await window.workstation.pendingFolder();
+      if (!stillHere || wanted.current !== undefined) {
+        return;
+      }
+      if (asked) {
+        read(asked);
+        return;
+      }
+
+      const current = (await window.workstation.currentReading()) as LibraryReading | undefined;
+      if (!stillHere || !current || wanted.current !== undefined) {
+        return;
+      }
+
+      wanted.current = current.folder;
+      setState({ status: 'ready', reading: current });
+    })();
+
+    return () => {
+      stillHere = false;
+    };
+  }, [read]);
+
   const open = useCallback(() => {
     void window.workstation.chooseFolder().then(folder => {
       if (folder) {
@@ -141,7 +150,13 @@ export function useLibrary(): Library {
   }, [read]);
 
   const openSample = useCallback(() => {
-    void window.workstation.sampleFolder().then(read);
+    // Absent until the studies have been downloaded, and then this does
+    // nothing rather than trying to read a folder called "undefined".
+    void window.workstation.sampleFolder().then(folder => {
+      if (folder) {
+        read(folder);
+      }
+    });
   }, [read]);
 
   const close = useCallback(() => {
