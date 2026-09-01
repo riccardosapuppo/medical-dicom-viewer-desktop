@@ -17,6 +17,7 @@
  * memory, never the application.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 
 /** Where a study was put, on one particular desk. */
 export interface Placement {
@@ -205,6 +206,27 @@ export function rememberFolder(layouts: Layouts, folder: string): Layouts {
   if (!folder) {
     return layouts;
   }
-  const rest = (layouts.recent ?? []).filter(other => other !== folder);
-  return { ...layouts, recent: [folder, ...rest].slice(0, MAX_RECENT) };
+
+  const full = path.resolve(folder);
+  const rest = (layouts.recent ?? []).filter(other => sameFolder(other, full) === false);
+
+  return { ...layouts, recent: [full, ...rest].slice(0, MAX_RECENT) };
+}
+
+/**
+ * Whether two paths name the same folder.
+ *
+ * They arrive written differently — a dialog, a folder dropped on the window, a
+ * command line, and whatever an older version wrote down — so comparing the
+ * strings listed one folder twice under two spellings, which the comment above
+ * says is exactly what this is meant to prevent. Windows does not care about
+ * case, and neither does this there.
+ */
+function sameFolder(a: string, b: string): boolean {
+  const left = path.resolve(a);
+  const right = path.resolve(b);
+
+  return process.platform === 'win32'
+    ? left.toLowerCase() === right.toLowerCase()
+    : left === right;
 }

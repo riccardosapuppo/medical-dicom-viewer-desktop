@@ -188,7 +188,19 @@ test('a folder opened again moves to the top rather than appearing twice', () =>
   layouts = rememberFolder(layouts, '/studies/b');
   layouts = rememberFolder(layouts, '/studies/a');
 
-  assert.deepEqual(layouts.recent, ['/studies/a', '/studies/b']);
+  assert.deepEqual(layouts.recent, [path.resolve('/studies/a'), path.resolve('/studies/b')]);
+});
+
+test('the same folder written two ways is one folder', () => {
+  // They arrive spelled differently — a dialog, a folder dropped on the window,
+  // a command line, and whatever an older version wrote down. Compared as raw
+  // strings, one folder was listed twice under two spellings, which is exactly
+  // what this list is meant to prevent.
+  let layouts = rememberFolder(EMPTY, '/studies/april');
+  layouts = rememberFolder(layouts, '/studies/../studies/april');
+  layouts = rememberFolder(layouts, '/studies/april/');
+
+  assert.equal((layouts.recent ?? []).length, 1);
 });
 
 test('the list of folders is bounded', () => {
@@ -198,7 +210,7 @@ test('the list of folders is bounded', () => {
   }
 
   assert.ok((layouts.recent ?? []).length <= 8, `kept ${(layouts.recent ?? []).length}`);
-  assert.equal(layouts.recent?.[0], '/studies/29', 'the newest should be first');
+  assert.equal(layouts.recent?.[0], path.resolve('/studies/29'), 'the newest should be first');
 });
 
 test('the folders survive a trip through the file', () => {
@@ -207,7 +219,7 @@ test('the folders survive a trip through the file', () => {
 
   save(target, layouts);
 
-  assert.deepEqual(load(target).recent, ['/studies/a']);
+  assert.deepEqual(load(target).recent, [path.resolve('/studies/a')]);
 });
 
 test('a folder list of the wrong shape is ignored rather than trusted', () => {
@@ -246,12 +258,12 @@ test('arranging a window does not throw away the folders opened before', () => {
   const withFolders = rememberFolder({ desks: {}, recent: [] }, 'C:/studies/april');
 
   const after = remember(withFolders, DESK, '1.2.3', 1, 1000);
-  assert.deepEqual(after.recent, ['C:/studies/april']);
+  assert.deepEqual(after.recent, [path.resolve('C:/studies/april')]);
 
   // And through the overflow, where the oldest desks are dropped.
   let many = withFolders;
   for (let desk = 0; desk < 40; desk++) {
     many = remember(many, `desk-${desk}`, '1.2.3', 0, desk);
   }
-  assert.deepEqual(many.recent, ['C:/studies/april']);
+  assert.deepEqual(many.recent, [path.resolve('C:/studies/april')]);
 });

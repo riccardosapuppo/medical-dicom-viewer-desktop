@@ -7,7 +7,7 @@
  * they were, and being able to see the arrangement the application believes in
  * is what makes that debuggable rather than magic.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import type { Desk } from '../main/display-topology';
 
@@ -97,6 +97,29 @@ export function App(): React.ReactElement {
     void window.workstation.recentFolders().then(setRecent);
   }, [library.state.status]);
 
+  /**
+   * Two things that stop being true when the folder changes.
+   *
+   * The screen layout stays open across a folder being opened or closed, so it
+   * turned up later in place of the screen somebody expected. And "2 windows
+   * reopened" kept saying so after those windows had been closed — opening
+   * another folder closes every one of them.
+   */
+  const first = useRef(true);
+
+  useEffect(() => {
+    // Not on the first run. A menu can ask for the screen layout while the
+    // window is showing a study, and the page then opens showing it — which
+    // this would undo the moment the folder that is already open is restored.
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+
+    setShowScreens(false);
+    setRestored(undefined);
+  }, [library.state.status]);
+
   useEffect(() => {
     void window.workstation.readDesk().then(setDesk);
 
@@ -177,9 +200,10 @@ export function App(): React.ReactElement {
         dragging={dragging}
       />
 
+      {/* The desk fingerprint used to sit here permanently: twelve characters of
+          a hash, which means something only where it is explained, and that is
+          the screen layout. A radiologist reading a study has no use for it. */}
       <footer className="status">
-        <span className="status__key">desk</span>
-        <span className="status__value">{desk?.fingerprint ?? '...'}</span>
         {restored ? <span className="status__said">{restored}</span> : null}
         <span className="status__spacer" />
         <Tally library={library} />
@@ -344,14 +368,17 @@ function Tally({ library }: { library: ReturnType<typeof useLibrary> }): React.R
   if (library.state.status !== 'ready') {
     return null;
   }
-  const { found, read, skipped, elapsedMs, index } = library.state.reading;
+  // How long it took is a benchmark, and a benchmark on screen is something a
+  // developer put there while working. The counts are the half that answers a
+  // question somebody actually has: did it find my studies.
+  const { found, read, skipped, index } = library.state.reading;
 
   return (
     <span className="status__muted">
       {/* Out of how many were looked at, not just how many turned out to be
           images: somebody who dropped the wrong folder wants to see that it
           held four hundred files and none of them were studies. */}
-      {read} of {found} files read in {Math.round(elapsedMs)} ms
+      {read} of {found} files read
       {skipped > 0 ? `, ${skipped} not DICOM` : ''}
       {index.duplicates > 0 ? `, ${index.duplicates} duplicates` : ''}
     </span>

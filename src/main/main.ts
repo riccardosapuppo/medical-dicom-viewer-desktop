@@ -9,7 +9,7 @@
  * arguments to the first and exits, which is also how a study opened from the
  * file manager arrives.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -126,6 +126,22 @@ function folderFromArgs(argv: string[]): string | undefined {
   // whatever the working directory happened to be, which for a packaged
   // application is not a thing anyone can point at.
   return given === undefined ? undefined : path.resolve(given);
+}
+
+/**
+ * A folder, given either a folder or something inside it.
+ *
+ * One image is how a study is opened from a file manager, and the folder around
+ * it is the study.
+ */
+function asFolder(chosen: string): string {
+  try {
+    return statSync(chosen).isDirectory() ? chosen : path.dirname(chosen);
+  } catch {
+    // Gone, or unreadable. Handed on as it is, so whatever reads it next says
+    // what is actually wrong with it.
+    return chosen;
+  }
 }
 
 function createWindow(): BrowserWindow {
@@ -492,7 +508,12 @@ if (!app.requestSingleInstanceLock()) {
       if (typeof folder !== 'string' || folder.length === 0) {
         return;
       }
-      indexer.read(folder);
+
+      // A single file is read as the folder that holds it, which is what
+      // choosing one through the dialog already did. Dropping the same file on
+      // the window used to be refused — "that is a file, not a folder" — for no
+      // reason a person could see.
+      indexer.read(asFolder(folder));
     });
 
     ipcMain.handle('library:cancel', () => indexer.cancel());

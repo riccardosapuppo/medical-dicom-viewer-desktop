@@ -161,6 +161,21 @@ export function serveViewer({ folder, archiveRoot }: ViewerOptions): void {
     const url = new URL(request.url);
     const wanted = decodeURIComponent(url.pathname);
 
+    // The page starts by clearing out any service worker it registered on a
+    // previous visit — housekeeping that only makes sense for the web
+    // deployment. On a scheme of our own the browser refuses the call, so the
+    // reading surface threw a security error on every single load. There is
+    // nothing to clear here.
+    //
+    // Answered empty rather than allowed: letting the viewer register a worker
+    // would let it cache its own bundle, which is the stale-bundle-after-an-
+    // update that everything below sets no-store to prevent.
+    if (wanted === '/init-service-worker.js') {
+      return new Response('', {
+        headers: { 'Content-Type': TYPES['.js'] as string, 'Cache-Control': 'no-store' },
+      });
+    }
+
     if (wanted === `/${CONFIG}`) {
       const original = await fs.promises.readFile(path.join(root, CONFIG), 'utf8');
       return new Response(configureFor(original, archiveRoot), {
