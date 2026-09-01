@@ -169,6 +169,16 @@ try {
     `bar "${bar}", document "${document_}"`
   );
 
+  // What the viewer says when images will not load. Its own wording is about a
+  // session expiring, which is true in front of an archive that answers only
+  // while a token is valid, and false here — this reads a folder off a disc.
+  const said = await page.evaluate(() => window.config && window.config.fetchErrorMessage);
+  check(
+    'the viewer was told there is no session to expire',
+    typeof said === 'string' && said.length > 0 && !said.toLowerCase().includes('sessione'),
+    String(said)
+  );
+
   // The viewport, drawn by the viewer from what the archive served it.
   const drew = await page
     .waitForFunction(

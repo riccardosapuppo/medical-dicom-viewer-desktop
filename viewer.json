@@ -1,5 +1,5 @@
 {
   "repository": "https://github.com/riccardosapuppo/medical-dicom-viewer-web.git",
-  "commit": "b3a3ccb",
+  "commit": "532ea47",
   "note": "The viewer this application ships. Built by tools/get-viewer.mjs and used unchanged; the only thing rewritten is where it reads studies from, and that happens at run time in src/main/viewer.ts."
 }
