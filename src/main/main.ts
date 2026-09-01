@@ -309,13 +309,6 @@ if (!app.requestSingleInstanceLock()) {
       mainWindow.webContents.getURL().startsWith(`${VIEWER_SCHEME}://`);
 
     /** A folder a menu asked for while there was no page to ask. Asked once. */
-    /** Whether the screen layout was asked for before this page existed. */
-    ipcMain.handle('view:pending-screens', () => {
-      const asked = wantScreens;
-      wantScreens = false;
-      return asked;
-    });
-
     ipcMain.handle('library:pending', () => {
       const folder = pending;
       pending = undefined;
@@ -481,24 +474,6 @@ if (!app.requestSingleInstanceLock()) {
         : undefined
     );
 
-    /** Reopens everything this desk remembers, for studies the open folder has. */
-    ipcMain.handle('reading:restore', () => {
-      let opened = 0;
-
-      for (const placement of arrangement(layouts, desk.fingerprint, desk.panes.length)) {
-        if (studyIsOpen(placement.studyInstanceUid)) {
-          reading.open(placement.studyInstanceUid, placement.pane, desk.panes, {
-            debug,
-            icon: ICON,
-            subject: describeStudy(placement.studyInstanceUid),
-          });
-          opened++;
-        }
-      }
-
-      return opened;
-    });
-
     app.on('will-quit', () => reading.closeAll());
 
 
@@ -534,8 +509,6 @@ if (!app.requestSingleInstanceLock()) {
      */
     let pending: string | undefined;
 
-    /** Set when the screen layout was asked for while a study was open. */
-    let wantScreens = false;
 
     /**
      * Opens a folder, from wherever the window happens to be.
@@ -720,15 +693,26 @@ if (!app.requestSingleInstanceLock()) {
             readingStudy: showingViewer(),
             backToWorklist: () => void mainWindow?.loadFile(RENDERER),
             closeFolder,
-            showScreens: () => {
-              if (showingViewer()) {
-                // Same gap as the File entries: the panel belongs to a page that
-                // does not exist while a study is open.
-                wantScreens = true;
-                void mainWindow?.loadFile(RENDERER);
-                return;
+            canRestore: desk.panes.length > 1 && current !== undefined,
+            restoreArrangement: () => {
+              let opened = 0;
+
+              for (const placement of arrangement(
+                layouts,
+                desk.fingerprint,
+                desk.panes.length
+              )) {
+                if (studyIsOpen(placement.studyInstanceUid)) {
+                  reading.open(placement.studyInstanceUid, placement.pane, desk.panes, {
+                    debug,
+                    icon: ICON,
+                    subject: describeStudy(placement.studyInstanceUid),
+                  });
+                  opened++;
+                }
               }
-              mainWindow?.webContents.send('view:screens');
+
+              mainWindow?.webContents.send('reading:restored', opened);
             },
             showAbout,
             recent: stillThere(),

@@ -21,7 +21,8 @@
     "package:dir": "npm run build && electron-builder --dir --publish never",
     "check:packaged": "npm run package:dir && node scripts/viewer-check.mjs --packaged",
     "viewer": "node tools/get-viewer.mjs",
-    "check:viewer": "npm run build && node scripts/viewer-check.mjs"
+    "check:viewer": "npm run build && node scripts/viewer-check.mjs",
+    "check:folder": "esbuild tools/check-folder.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/check-folder.js && node dist/check-folder.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

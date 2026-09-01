@@ -57,15 +57,38 @@ function start(open) {
   });
 }
 
-async function connect() {
+async function connect(child) {
+  let stopped;
+  child.on('exit', code => {
+    stopped = code;
+  });
+
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
       return await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
     } catch {
+      if (stopped !== undefined) {
+        throw new Error(
+          `the application exited straight away (code ${stopped}). It holds a ` +
+            'single-instance lock, so another copy is probably still running.'
+        );
+      }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
+
   throw new Error('the application never opened its debugging port');
+}
+
+/** Waits for a killed application to actually be gone. */
+function ended(child) {
+  return new Promise(resolve => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolve();
+      return;
+    }
+    child.once('exit', () => resolve());
+  });
 }
 
 async function shoot(page, name) {
@@ -79,7 +102,7 @@ fs.mkdirSync(docs, { recursive: true });
 
 // First pass: nothing open.
 let child = start();
-let browser = await connect();
+let browser = await connect(child);
 
 try {
   const context = browser.contexts()[0];
@@ -103,10 +126,16 @@ try {
   child.kill();
 }
 
+// Waited for rather than assumed. The application holds a single-instance lock,
+// so starting the second pass before the first has actually gone means the
+// second one hands over its arguments and exits — which looked like a debugging
+// port that never opened.
+await ended(child);
+
 // Second pass: the folder open from the start, which is how the application is
 // asked to read one from outside itself.
 child = start(folder);
-browser = await connect();
+browser = await connect(child);
 
 try {
   const context = browser.contexts()[0];

@@ -21,7 +21,10 @@ export interface MenuActions {
   readingStudy: boolean;
   /** Closes the folder and returns to the opening screen. */
   closeFolder: () => void;
-  showScreens: () => void;
+  /** Puts the windows on the other screens back where this desk had them. */
+  restoreArrangement: () => void;
+  /** Whether there is an arrangement to put back, and screens to put it on. */
+  canRestore: boolean;
   showAbout: () => void;
   recent: string[];
   openRecent: (folder: string) => void;
@@ -125,14 +128,33 @@ export function menuTemplate({
     },
 
     {
-      label: '&View',
+      label: '&Window',
       submenu: [
-        { label: 'Screen Layout…', click: actions.showScreens },
+        // Where the windows on the other screens are put back. It belongs in
+        // the menu about windows; it was on the worklist, which is about
+        // studies, and then in a panel of its own that had nothing else in it.
+        {
+          label: 'Restore Arrangement',
+          enabled: actions.canRestore,
+          click: actions.restoreArrangement,
+        },
         { type: 'separator' },
-        { role: 'togglefullscreen' },
-        // Only with --debug. Reload is what makes this dangerous rather than
-        // merely untidy: it discards the folder, the window and every
-        // measurement on screen, and there is nothing to undo it with.
+        // Zoom is a macOS role — it is what the green button does there. On
+        // Windows and Linux it is an entry that does nothing when clicked.
+        ...(onMac
+          ? ([
+              { role: 'minimize' },
+              { role: 'zoom' },
+              { type: 'separator' },
+              { role: 'front' },
+            ] as MenuItemConstructorOptions[])
+          : ([{ role: 'minimize' }] as MenuItemConstructorOptions[])),
+
+        // Only with --debug, and never otherwise. Reload is what makes this
+        // worth guarding rather than merely untidy: pressed by accident it
+        // throws away the folder and the window, with nothing to undo it. They
+        // used to live under View, which no longer exists — it had grown down
+        // to one entry that opened a panel nobody had asked to see.
         ...(debug
           ? ([
               { type: 'separator' },
@@ -142,15 +164,6 @@ export function menuTemplate({
             ] as MenuItemConstructorOptions[])
           : []),
       ],
-    },
-
-    {
-      label: '&Window',
-      // Zoom is a macOS role — it is what the green button does there. On
-      // Windows and Linux it is an entry that does nothing when clicked.
-      submenu: onMac
-        ? [{ role: 'minimize' }, { role: 'zoom' }, { type: 'separator' }, { role: 'front' }]
-        : [{ role: 'minimize' }],
     },
 
     {

@@ -103,6 +103,20 @@ const child = spawn(executable, args, {
   env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined },
 });
 
+/**
+ * Why the application stopped, if it did.
+ *
+ * It holds a single-instance lock, so a copy already running — one left behind
+ * by an earlier check, or the development build while this drives the packaged
+ * one — makes this copy hand over its arguments and exit at once. What that
+ * looked like was "the application never opened its debugging port", which
+ * sends you looking at the wrong thing. It cost half an hour once.
+ */
+let stopped;
+child.on('exit', code => {
+  stopped = code;
+});
+
 let failures = 0;
 
 function check(name, ok, detail = '') {
@@ -117,9 +131,17 @@ async function connect() {
     try {
       return await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
     } catch {
+      if (stopped !== undefined) {
+        throw new Error(
+          `the application exited straight away (code ${stopped}). ` +
+            'It holds a single-instance lock, so another copy is probably ' +
+            'already running — close it and try again.'
+        );
+      }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
+
   throw new Error('the application never opened its debugging port');
 }
 

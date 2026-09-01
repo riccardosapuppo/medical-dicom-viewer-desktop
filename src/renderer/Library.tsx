@@ -115,6 +115,19 @@ function StudyBlock({
       </button>
 
       <span className="study__aside">
+        {/* Said out loud. The whole row opens the study, which is a big target
+            and the quick way, but a row that responds to a click without ever
+            saying so is a row nobody is sure about — and being unsure is worse
+            here than being slow. */}
+        <button
+          type="button"
+          className="study__go"
+          onClick={() => onOpen({ patient, study })}
+          title="Open this study in the viewer"
+        >
+          Open
+        </button>
+
         {/* Sending a study to a screen is the whole point of a reading room, so
             it is on the row rather than behind a menu. Numbered, because a
             screen is a place and the number is where it is on the desk. */}

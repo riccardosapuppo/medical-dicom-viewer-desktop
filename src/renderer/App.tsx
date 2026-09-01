@@ -14,7 +14,6 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import type { Desk } from '../main/display-topology';
 
-import { DeskMap } from './DeskMap';
 import { Start } from './Start';
 import { tailOfPath } from './format';
 import { Library } from './Library';
@@ -44,7 +43,6 @@ export function App(): React.ReactElement {
     );
   };
   const [restored, setRestored] = useState<string | undefined>(undefined);
-  const [showScreens, setShowScreens] = useState(false);
   const [viewerBuilt, setViewerBuilt] = useState(true);
   const [installed, setInstalled] = useState(true);
   const [recent, setRecent] = useState<string[]>([]);
@@ -66,20 +64,10 @@ export function App(): React.ReactElement {
     void window.workstation.installed().then(setInstalled);
   }, []);
 
-  // The screen layout, if a menu asked for it while this page did not exist.
-  useEffect(() => {
-    void window.workstation.pendingScreens().then(asked => {
-      if (asked) {
-        setShowScreens(true);
-      }
-    });
-  }, []);
-
   // The menu is in the main process and the state is here, so the two talk.
   useEffect(() => {
     const stop = [
       window.workstation.onCloseStudy(() => library.close()),
-      window.workstation.onShowScreens(() => setShowScreens(true)),
     ];
     return () => stop.forEach(off => off());
   }, [library]);
@@ -119,9 +107,21 @@ export function App(): React.ReactElement {
       return;
     }
 
-    setShowScreens(false);
     setRestored(undefined);
   }, [library.state.status]);
+
+  // Said by the main process when the Window menu puts an arrangement back.
+  useEffect(
+    () =>
+      window.workstation.onRestored(opened => {
+        setRestored(
+          opened > 0
+            ? `${opened} window${opened === 1 ? '' : 's'} reopened`
+            : 'nothing remembered for this desk'
+        );
+      }),
+    []
+  );
 
   useEffect(() => {
     void window.workstation.readDesk().then(setDesk);
@@ -209,9 +209,6 @@ export function App(): React.ReactElement {
         library={library}
         onOpen={open}
         screens={desk?.panes.length ?? 1}
-        showScreens={showScreens}
-        onLeaveScreens={() => setShowScreens(false)}
-        onRestored={setRestored}
         recent={recent}
         dragging={dragging}
       />
@@ -260,9 +257,6 @@ function Body({
   library,
   onOpen,
   screens,
-  showScreens,
-  onLeaveScreens,
-  onRestored,
   recent,
   dragging,
 }: {
@@ -271,57 +265,10 @@ function Body({
   library: ReturnType<typeof useLibrary>;
   onOpen: (opened: Opened) => void;
   screens: number;
-  showScreens: boolean;
-  onLeaveScreens: () => void;
-  onRestored: (said: string) => void;
   recent: string[];
   dragging: boolean;
 }): React.ReactElement {
   const { state } = library;
-
-  // Asked for first, and deliberately. This used to come after the worklist, so
-  // with a folder open — which is every time anybody would ask for it — the menu
-  // entry did nothing at all.
-  if (showScreens) {
-    return (
-      <section className="panel panel--centred">
-        {desk ? (
-          <div className="desk">
-            <DeskMap desk={desk} key={deskKey} />
-            <p className="muted desk__caption">
-              {desk.panes.length} {desk.panes.length === 1 ? 'screen is' : 'screens are'} attached.
-              A study sent to one of these opens in a window of its own on that glass, and where
-              you put it is remembered against the fingerprint below — so the same desk gets the
-              same arrangement back, and a different desk gets its own.
-            </p>
-            <div className="desk__actions">
-              <button
-                type="button"
-                className="button"
-                title="Reopen the windows this desk was last arranged with"
-                onClick={() => {
-                  void window.workstation.restoreArrangement().then(opened => {
-                    onRestored(
-                      opened > 0
-                        ? `${opened} window${opened === 1 ? '' : 's'} reopened`
-                        : 'nothing remembered for this desk'
-                    );
-                  });
-                }}
-              >
-                Restore arrangement
-              </button>
-              <button type="button" className="button button--primary" onClick={onLeaveScreens}>
-                Back
-              </button>
-            </div>
-          </div>
-        ) : (
-          <p className="muted">Reading the desk…</p>
-        )}
-      </section>
-    );
-  }
 
   if (state.status === 'reading') {
     const percent = state.total === 0 ? 0 : Math.round((state.done / state.total) * 100);

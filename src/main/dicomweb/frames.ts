@@ -124,9 +124,15 @@ function uncompressed(
  * A frame pulled out of encapsulated pixel data.
  *
  * Compressed frames are stored as fragments of unpredictable length, so there is
- * no offset to compute: the file is parsed and the fragment table walked. That
- * costs a parse per frame, which is the price of compression and is paid on
- * exactly the studies where each frame is small.
+ * no offset to compute: the file has to be walked to find the one asked for.
+ * How to walk it depends on what the file provides, and the first attempt here
+ * assumed the friendliest case and failed on almost every real archive.
+ *
+ * A Basic Offset Table says where each frame starts. The standard allows it to
+ * be empty, and most equipment leaves it empty — so the reader that needs it
+ * threw, the archive answered 500, and the viewer put up "these images could not
+ * be read" over a study that is perfectly readable. Four ways in, tried in
+ * order, and the last of them says why rather than guessing:
  */
 function encapsulated(
   filePath: string,
@@ -134,20 +140,61 @@ function encapsulated(
   frameIndex: number
 ): Frame | FrameProblem {
   let bytes: Buffer;
+
   try {
     const file = fs.readFileSync(filePath);
     const dataSet = dicomParser.parseDicom(new Uint8Array(file));
     const element = dataSet.elements['x7fe00010'];
+
     if (!element) {
       return { reason: 'this image carries no pixel data', status: 404 };
     }
-    bytes = Buffer.from(dicomParser.readEncapsulatedImageFrame(dataSet, element, frameIndex));
+
+    const table = element.basicOffsetTable ?? [];
+    const fragments = element.fragments ?? [];
+    const frames = Math.max(1, pixels.numberOfFrames);
+
+    if (table.length > 0) {
+      // The file says where each frame begins. Believe it.
+      bytes = Buffer.from(dicomParser.readEncapsulatedImageFrame(dataSet, element, frameIndex));
+    } else if (frames === 1) {
+      // One frame, however many fragments it was split into. This is the common
+      // case for a single image, and it needs no table at all.
+      bytes = Buffer.from(
+        dicomParser.readEncapsulatedPixelDataFromFragments(dataSet, element, 0, fragments.length)
+      );
+    } else if (isJpeg(pixels.transferSyntaxUid)) {
+      // No table, several frames, and a compression whose frames each begin with
+      // a marker the parser can find. It builds the table the file did not.
+      const built = dicomParser.createJPEGBasicOffsetTable(dataSet, element);
+      bytes = Buffer.from(
+        dicomParser.readEncapsulatedImageFrame(dataSet, element, frameIndex, built)
+      );
+    } else if (fragments.length === frames) {
+      // No table, and as many fragments as frames: one each, which the standard
+      // says is what an empty table means.
+      bytes = Buffer.from(
+        dicomParser.readEncapsulatedPixelDataFromFragments(dataSet, element, frameIndex, 1)
+      );
+    } else {
+      return {
+        reason:
+          `this image is compressed as ${pixels.transferSyntaxUid}, has ${frames} frames in ` +
+          `${fragments.length} fragments, and carries no offset table saying where they begin`,
+        status: 500,
+      };
+    }
   } catch (problem) {
     const detail = problem instanceof Error ? problem.message : 'unknown';
     return { reason: `the compressed pixel data could not be read: ${detail}`, status: 500 };
   }
 
   return { bytes, mediaType: mediaTypeOf(pixels.transferSyntaxUid) };
+}
+
+/** Whether frames of this compression each start with a marker that can be found. */
+function isJpeg(transferSyntaxUid: string): boolean {
+  return transferSyntaxUid.startsWith('1.2.840.10008.1.2.4.');
 }
 
 /** Tells a produced frame from a refusal, without either pretending to be the other. */

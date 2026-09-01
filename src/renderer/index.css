@@ -972,3 +972,27 @@ body {
   font-family: var(--mono);
   color: var(--live);
 }
+
+/* The way in, said in a word. The row opens the study too, but a row that
+   responds to a click without saying so is a row nobody is sure about. */
+.study__go {
+  padding: 3px 12px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink-dim);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.study:hover .study__go,
+.study__go:focus-visible {
+  color: var(--live);
+  border-color: var(--live);
+}
+
+.study__go:focus-visible {
+  outline: 1px solid var(--live);
+  outline-offset: 1px;
+}

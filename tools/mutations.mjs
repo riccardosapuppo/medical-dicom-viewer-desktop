@@ -232,24 +232,6 @@ const MUTATIONS = [
     'walk: a missing folder falls back to the raw syscall error',
   ],
   [
-    'src/renderer/DeskMap.tsx',
-    '  const left = Math.min(...panes.map(p => p.bounds.x));',
-    '  const left = 0;',
-    'map: a screen left of the primary is drawn off the canvas',
-  ],
-  [
-    'src/renderer/DeskMap.tsx',
-    '              height={pane.workArea.height}',
-    '              height={pane.bounds.height}',
-    'map: the work area is drawn as the full screen',
-  ],
-  [
-    'src/renderer/DeskMap.tsx',
-    "className={pane.isPrimary ? 'pane pane--primary' : 'pane'}",
-    "className={'pane'}",
-    'map: nothing marks which screen is primary',
-  ],
-  [
     'src/main/dicom/build-index.ts',
     '    if (seen.has(header.sopInstanceUid)) {',
     '    if (false) {',
@@ -309,12 +291,47 @@ const MUTATIONS = [
     "  return 'Unidentified';",
     'worklist: a de-identified patient loses the identifier the file does carry',
   ],
+  [
+    'src/main/dicomweb/frames.ts',
+    '    } else if (frames === 1) {',
+    '    } else if (false) {',
+    'frames: a compressed image with no offset table cannot be read at all',
+  ],
+  [
+    'src/main/dicomweb/frames.ts',
+    '        dicomParser.readEncapsulatedPixelDataFromFragments(dataSet, element, 0, fragments.length)',
+    '        dicomParser.readEncapsulatedPixelDataFromFragments(dataSet, element, 0, 1)',
+    'frames: an image split across fragments comes back with its bottom missing',
+  ],
+  [
+    'src/main/dicomweb/frames.ts',
+    '    } else if (fragments.length === frames) {',
+    '    } else if (false) {',
+    'frames: a multiframe image with one fragment each is refused',
+  ],
+  [
+    'src/main/dicomweb/frames.ts',
+    '        dicomParser.readEncapsulatedPixelDataFromFragments(dataSet, element, frameIndex, 1)',
+    '        dicomParser.readEncapsulatedPixelDataFromFragments(dataSet, element, 0, 1)',
+    'frames: every frame of a compressed series is served as the first one',
+  ],
 ];
 
 const originals = new Map();
+const missing = new Set();
+
 for (const [file] of MUTATIONS) {
-  if (!originals.has(file)) {
+  if (originals.has(file) || missing.has(file)) {
+    continue;
+  }
+  try {
     originals.set(file, fs.readFileSync(path.join(root, file), 'utf8'));
+  } catch {
+    // A file that has been deleted is a mutation that has gone stale, which is
+    // reported below like any other. It used to bring the whole harness down
+    // with a stack trace, which says nothing about which check stopped
+    // protecting anything.
+    missing.add(file);
   }
 }
 

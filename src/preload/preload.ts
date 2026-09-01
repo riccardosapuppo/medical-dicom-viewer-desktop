@@ -63,7 +63,6 @@ const api = {
     ipcRenderer.invoke('reading:recall', studyInstanceUid),
 
   /** Reopens the arrangement this desk remembers. Resolves to how many windows opened. */
-  restoreArrangement: (): Promise<number> => ipcRenderer.invoke('reading:restore'),
 
   /** Opens the file chooser. Resolves to the folder the chosen files are in. */
   chooseFiles: (): Promise<string | undefined> => ipcRenderer.invoke('library:chooseFiles'),
@@ -98,8 +97,17 @@ const api = {
    */
   pendingFolder: (): Promise<string | undefined> => ipcRenderer.invoke('library:pending'),
 
-  /** Whether the screen layout was asked for while this page did not exist. */
-  pendingScreens: (): Promise<boolean> => ipcRenderer.invoke('view:pending-screens'),
+  /**
+   * Said when the Window menu has put an arrangement back.
+   *
+   * The menu does the work in the main process, because it has to work whether
+   * or not this page exists — while a study is open it does not.
+   */
+  onRestored: (handler: (opened: number) => void): (() => void) => {
+    const listener = (_event: unknown, opened: number): void => handler(opened);
+    ipcRenderer.on('reading:restored', listener);
+    return () => ipcRenderer.off('reading:restored', listener);
+  },
 
   viewerPresent: (): Promise<boolean> => ipcRenderer.invoke('viewer:present'),
 
@@ -138,12 +146,6 @@ const api = {
   },
 
   /** The menu asked for the screens to be shown. */
-  onShowScreens: (handler: () => void): (() => void) => {
-    const listener = (): void => handler();
-    ipcRenderer.on('view:screens', listener);
-    return () => ipcRenderer.off('view:screens', listener);
-  },
-
   /** A folder the application was asked to open: a command line, or a second launch. */
   onOpenRequest: (handler: (folder: string) => void): (() => void) => {
     const listener = (_event: unknown, folder: string): void => handler(folder);
