@@ -58,14 +58,17 @@ function typeOf(file: string): string {
  *
  * The viewer's own configuration is eight hundred lines of decisions that took
  * a long time to get right, so it is served as it is and corrected afterwards
- * rather than replaced. Two corrections:
+ * rather than replaced. Three corrections:
  *
  *   - the archive it reads from is the one this application just started, whose
  *     address is not known until then;
  *   - every other source is removed. The file lists public archives on the
  *     internet, which on a desktop reading station are both useless — there is
  *     no connection to assume — and wrong: this application opens the files in
- *     front of it and reaches nowhere else.
+ *     front of it and reaches nowhere else;
+ *   - what it says when images will not load. Its own wording is about a
+ *     session expiring, which is true in front of an archive that answers only
+ *     while a token is valid, and false here.
  */
 export function configureFor(original: string, archiveRoot: string): string {
   const tail = `
@@ -101,6 +104,12 @@ export function configureFor(original: string, archiveRoot: string): string {
   config.dataSources = local;
   config.defaultDataSourceName = 'dicomweb';
   config.showStudyList = true;
+
+  // There is no session here, so nothing can expire. The viewer's own wording
+  // for a failed image fetch says otherwise, and full-screen: it is written for
+  // an archive that answers only while a token is valid. What it means here is
+  // that a file could not be read from the folder, which is what it now says.
+  config.fetchErrorMessage = 'These images could not be read from the folder.';
 })();
 `;
 
