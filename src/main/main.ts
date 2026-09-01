@@ -532,7 +532,18 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('library:sample', () => demoStudies());
 
-    ipcMain.handle('library:recent', () => layouts.recent ?? []);
+    /**
+     * The folders opened before, minus the ones that are not there any more.
+     *
+     * A removable disc that has been unplugged, a folder that was moved, a
+     * study that this application itself used to ship and no longer does. An
+     * entry that opens onto nothing is worse than one entry fewer: it is a
+     * promise the list cannot keep, and the person clicking it has no way to
+     * know which of the two it was.
+     */
+    const stillThere = (): string[] => (layouts.recent ?? []).filter(folder => existsSync(folder));
+
+    ipcMain.handle('library:recent', () => stillThere());
 
     /**
      * What the window is showing, said where a person looks for it.
@@ -598,7 +609,7 @@ if (!app.requestSingleInstanceLock()) {
             },
             showScreens: () => mainWindow?.webContents.send('view:screens'),
             showAbout,
-            recent: layouts.recent ?? [],
+            recent: stillThere(),
             openRecent: openFolder,
           },
           debug
