@@ -17,7 +17,15 @@ import { describe, it } from 'node:test';
 
 import { decideWhatToServe, NEVER_STORED } from '../src/main/viewer';
 
-const root = path.resolve('C:/viewer');
+/**
+ * An absolute root on either platform, and that matters.
+ *
+ * It was `path.resolve('C:/viewer')`, which is absolute on Windows and, on
+ * Linux, a relative path glued onto whatever the working directory happens to
+ * be — so this passed here and failed on the runner. `path.sep` gives `C:\…`
+ * on one and `/viewer` on the other, with no working directory involved.
+ */
+const root = path.resolve(`${path.sep}viewer`);
 const page = path.join(root, 'index.html');
 
 /** A disc where only these paths are files. */
