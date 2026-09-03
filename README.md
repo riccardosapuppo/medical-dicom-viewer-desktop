@@ -27,13 +27,20 @@ independent reimplementation, written from scratch against public data.
 - **A connection**, once, for the viewer and the demonstration studies. After
   that the application runs with no network at all, which is rather the point:
   a reading room is not always on the internet and often is not on it at all.
-- **About 750 MB** in place — 414 MB of packages, 266 MB of studies, 37 MB of
-  built viewer. Building the viewer needs several gigabytes more while it
-  happens, for a checkout that is deleted afterwards. Producing an installer
-  adds about 320 MB on top of that.
+- **743 MB in place**, measured with `du -sh` rather than rounded: **437 MB** of
+  packages, **268 MB** of studies, **38 MB** of built viewer. Building the
+  viewer needs several gigabytes more while it happens, for a checkout that is
+  deleted afterwards. Producing an installer adds about 320 MB on top.
 
 No Docker, no database, no DICOM toolkit, and no administrator rights: on
 Windows the installer this produces installs per user, deliberately.
+
+**To put the machine back:** delete the clone. That is genuinely all of it —
+`node_modules/`, `demo-data/`, `viewer-dist/`, `release/` and `dist/` all live
+inside it, nothing is installed globally, no service is registered and no
+registry key is written. If you *installed* the application from an installer
+this produced, uninstall it the usual way: it went in per user, so taking it out
+needs no administrator either.
 
 ## Where it is
 

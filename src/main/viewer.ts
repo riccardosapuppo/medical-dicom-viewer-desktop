@@ -167,6 +167,46 @@ export const VIEWER_PRIVILEGES = {
   },
 } as const;
 
+/**
+ * What the scheme should answer for one address, decided without answering it.
+ *
+ * Pulled out of the handler so it can be asked directly. Everything the rules
+ * are about — that nothing is ever cached, that a request naming a file which
+ * is not there is a 404 rather than the page, that the viewer's service-worker
+ * script is answered empty rather than allowed — was correct and guarded by
+ * nothing: the handler needs Electron's `protocol` and `net`, so no test could
+ * reach it, and a rule no test can reach is a rule that comes back.
+ *
+ * `exists` is injected for the same reason: a decision that reads the disc is a
+ * decision that can only be checked on a machine with the right files on it.
+ */
+export type WhatToServe =
+  | { what: 'empty-script' }
+  | { what: 'config' }
+  | { what: 'file'; file: string }
+  | { what: 'page'; file: string }
+  | { what: 'not-found' };
+
+export function decideWhatToServe(
+  wanted: string,
+  { root, page, exists }: { root: string; page: string; exists: (file: string) => boolean }
+): WhatToServe {
+  if (wanted === '/init-service-worker.js') return { what: 'empty-script' };
+  if (wanted === `/${CONFIG}`) return { what: 'config' };
+
+  const file = resolveWithin(root, wanted);
+  if (!file) return { what: 'not-found' };
+
+  if (exists(file)) return { what: 'file', file };
+
+  // The viewer navigates within itself, so most addresses it asks for were
+  // never written to disc. Those are the page; a missing image is not.
+  return path.extname(wanted) === '' ? { what: 'page', file: page } : { what: 'not-found' };
+}
+
+/** Every answer this scheme gives carries it, and a test says so. */
+export const NEVER_STORED = 'no-store';
+
 /** Starts answering for `viewer://app/…`. */
 export function serveViewer({ folder, archiveRoot }: ViewerOptions): void {
   const root = path.resolve(folder);
@@ -176,6 +216,15 @@ export function serveViewer({ folder, archiveRoot }: ViewerOptions): void {
     const url = new URL(request.url);
     const wanted = decodeURIComponent(url.pathname);
 
+    // What to answer is decided by `decideWhatToServe`, which is a pure
+    // function and therefore one a test can ask. This block only carries the
+    // answer out.
+    const said = decideWhatToServe(wanted, {
+      root,
+      page,
+      exists: (file) => fs.existsSync(file) && fs.statSync(file).isFile(),
+    });
+
     // The page starts by clearing out any service worker it registered on a
     // previous visit — housekeeping that only makes sense for the web
     // deployment. On a scheme of our own the browser refuses the call, so the
@@ -184,42 +233,32 @@ export function serveViewer({ folder, archiveRoot }: ViewerOptions): void {
     //
     // Answered empty rather than allowed: letting the viewer register a worker
     // would let it cache its own bundle, which is the stale-bundle-after-an-
-    // update that everything below sets no-store to prevent.
-    if (wanted === '/init-service-worker.js') {
+    // update that everything else sets no-store to prevent.
+    if (said.what === 'empty-script') {
       return new Response('', {
-        headers: { 'Content-Type': TYPES['.js'] as string, 'Cache-Control': 'no-store' },
+        headers: { 'Content-Type': TYPES['.js'] as string, 'Cache-Control': NEVER_STORED },
       });
     }
 
-    if (wanted === `/${CONFIG}`) {
+    if (said.what === 'config') {
       const original = await fs.promises.readFile(path.join(root, CONFIG), 'utf8');
       return new Response(configureFor(original, archiveRoot), {
-        headers: { 'Content-Type': TYPES['.js'] as string, 'Cache-Control': 'no-store' },
+        headers: { 'Content-Type': TYPES['.js'] as string, 'Cache-Control': NEVER_STORED },
       });
     }
 
-    const file = resolveWithin(root, wanted);
-    if (!file) {
+    if (said.what === 'not-found') {
       return new Response('Not found.', { status: 404 });
     }
 
-    // The viewer navigates within itself, so most addresses it asks for were
-    // never written to disc. Those are the page; a missing image is not.
-    const asked = fs.existsSync(file) && fs.statSync(file).isFile() ? file : undefined;
-    const target = asked ?? (path.extname(wanted) === '' ? page : undefined);
-
-    if (!target) {
-      return new Response('Not found.', { status: 404 });
-    }
-
-    const body = await net.fetch(pathToFileURL(target).toString());
+    const body = await net.fetch(pathToFileURL(said.file).toString());
     return new Response(body.body, {
       status: 200,
       headers: {
-        'Content-Type': typeOf(target),
+        'Content-Type': typeOf(said.file),
         // The window is the only reader, and a stale bundle after an update is
         // a bug report that takes a day to understand.
-        'Cache-Control': 'no-store',
+        'Cache-Control': NEVER_STORED,
       },
     });
   });
