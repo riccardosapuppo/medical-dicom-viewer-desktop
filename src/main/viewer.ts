@@ -23,12 +23,13 @@ import { pathToFileURL } from 'node:url';
 
 import { net, protocol } from 'electron';
 
+import { CONFIG, decideWhatToServe, NEVER_STORED } from './what-to-serve';
+
 export const VIEWER_SCHEME = 'viewer';
 
 /** The one address the window ever loads. */
 export const VIEWER_URL = `${VIEWER_SCHEME}://app/`;
 
-const CONFIG = 'app-config.js';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -131,13 +132,6 @@ export function configureFor(original: string, archiveRoot: string): string {
   return `${original}\n${tail}`;
 }
 
-/** Refuses an address that climbs out of the folder being served. */
-function resolveWithin(root: string, requested: string): string | undefined {
-  const full = path.resolve(root, `.${path.posix.normalize(requested)}`);
-  const inside = full === root || full.startsWith(root + path.sep);
-  return inside ? full : undefined;
-}
-
 export interface ViewerOptions {
   /** The built viewer: the folder holding its index.html. */
   folder: string;
@@ -166,46 +160,6 @@ export const VIEWER_PRIVILEGES = {
     stream: true,
   },
 } as const;
-
-/**
- * What the scheme should answer for one address, decided without answering it.
- *
- * Pulled out of the handler so it can be asked directly. Everything the rules
- * are about — that nothing is ever cached, that a request naming a file which
- * is not there is a 404 rather than the page, that the viewer's service-worker
- * script is answered empty rather than allowed — was correct and guarded by
- * nothing: the handler needs Electron's `protocol` and `net`, so no test could
- * reach it, and a rule no test can reach is a rule that comes back.
- *
- * `exists` is injected for the same reason: a decision that reads the disc is a
- * decision that can only be checked on a machine with the right files on it.
- */
-export type WhatToServe =
-  | { what: 'empty-script' }
-  | { what: 'config' }
-  | { what: 'file'; file: string }
-  | { what: 'page'; file: string }
-  | { what: 'not-found' };
-
-export function decideWhatToServe(
-  wanted: string,
-  { root, page, exists }: { root: string; page: string; exists: (file: string) => boolean }
-): WhatToServe {
-  if (wanted === '/init-service-worker.js') return { what: 'empty-script' };
-  if (wanted === `/${CONFIG}`) return { what: 'config' };
-
-  const file = resolveWithin(root, wanted);
-  if (!file) return { what: 'not-found' };
-
-  if (exists(file)) return { what: 'file', file };
-
-  // The viewer navigates within itself, so most addresses it asks for were
-  // never written to disc. Those are the page; a missing image is not.
-  return path.extname(wanted) === '' ? { what: 'page', file: page } : { what: 'not-found' };
-}
-
-/** Every answer this scheme gives carries it, and a test says so. */
-export const NEVER_STORED = 'no-store';
 
 /** Starts answering for `viewer://app/…`. */
 export function serveViewer({ folder, archiveRoot }: ViewerOptions): void {

@@ -8,14 +8,18 @@
  * fallback in particular, which is one line and looks like an obvious
  * improvement until a missing image arrives as a page of HTML.
  *
- * The decision is now a pure function and this asks it directly.
+ * The decision is a pure function now, in a module of its own that imports no
+ * Electron — which is what makes it reachable at all: importing electron outside
+ * a running Electron process throws, and on a runner that installs without the
+ * binary it throws before a single assertion runs. That is how this file passed
+ * on Windows and failed in continuous integration on its first push.
  */
 
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
-import { decideWhatToServe, NEVER_STORED } from '../src/main/viewer';
+import { decideWhatToServe, NEVER_STORED } from '../src/main/what-to-serve';
 
 /**
  * An absolute root on either platform, and that matters.
